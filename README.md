@@ -37,5 +37,5 @@
    ```bash
    cd путь_к_папке
 4. Откройте файл:
-5. ```bash
+   ```bash
    python main.py
