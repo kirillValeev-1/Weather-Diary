@@ -8,7 +8,7 @@ from models import WeatherRecord
 from storage import load_records, save_records
 from validators import validate_date, validate_temperature, validate_record
 from statistics import summary
-
+from exporters import export_to_csv
 
 records = []
 current_filter_date = ""
@@ -21,6 +21,16 @@ status_label = None
 sort_column = None
 sort_reverse = False
 
+def do_export(table_frame) -> None:
+    """Экспорт отфильтрованных записей в CSV."""
+    rows = filter_records()
+    if not rows:
+        status_label.config(text="Нечего экспортировать", fg="red")
+        return
+    if export_to_csv(rows):
+        status_label.config(text="Экспорт в weather_export.csv выполнен", fg="green")
+    else:
+        status_label.config(text="Ошибка экспорта", fg="red")
 
 def load_data() -> None:
     global records
@@ -302,6 +312,10 @@ def delete_record(table_frame) -> None:
 
     tk.Button(selection_window, text="Удалить",
               command=delete_selected, bg="red", fg="white").pack(pady=10)
+    tk.Button(button_frame, text="ЭКСПОРТ В CSV", bg="#4a90d9", fg="white",
+          font=("Arial", 10, "bold"),
+          command=lambda: do_export(table_frame)
+          ).pack(side="left", padx=5)
 
 
 def main() -> None:
