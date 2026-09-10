@@ -17,33 +17,27 @@ status_label = None
 
 
 def load_data() -> None:
-    """Загружает записи из JSON в глобальный список records."""
     global records
     records = load_records()
 
 
 def save_data() -> None:
-    """Сохраняет текущий список записей в JSON-файл."""
     save_records(records)
 
 
 def clear_table(table_frame: tk.Frame) -> None:
-    """Удаляет все виджеты из таблицы."""
     for widget in table_frame.winfo_children():
         widget.destroy()
 
 
 def display_records(table_frame: tk.Frame, record_list: list) -> None:
-    """Отображает записи в виде таблицы."""
     clear_table(table_frame)
 
     headers = ["Дата", "Температура", "Описание", "Осадки"]
     for col, header in enumerate(headers):
-        label = tk.Label(
-            table_frame, text=header, font=("Arial", 10, "bold"),
-            borderwidth=1, relief="solid", padx=10, pady=5, bg="lightgray",
-        )
-        label.grid(row=0, column=col, sticky="nsew")
+        tk.Label(table_frame, text=header, font=("Arial", 10, "bold"),
+                 borderwidth=1, relief="solid", padx=10, pady=5,
+                 bg="lightgray").grid(row=0, column=col, sticky="nsew")
 
     for row, rec in enumerate(record_list, start=1):
         tk.Label(table_frame, text=rec.date,
@@ -64,14 +58,12 @@ def display_records(table_frame: tk.Frame, record_list: list) -> None:
 
 
 def refresh_table(table_frame: tk.Frame) -> None:
-    """Обновляет таблицу и панель статистики с учётом фильтров."""
     filtered = filter_records()
     display_records(table_frame, filtered)
     stats_label.config(text=summary(filtered))
 
 
 def filter_records() -> list:
-    """Возвращает отфильтрованный список записей."""
     global current_filter_date, current_filter_temp
     filtered = records.copy()
     if current_filter_date:
@@ -82,7 +74,6 @@ def filter_records() -> list:
 
 
 def add_record(date_entry, temp_entry, desc_entry, precip_var, table_frame) -> None:
-    """Добавляет новую запись о погоде."""
     date = date_entry.get().strip()
     temp = temp_entry.get().strip()
     desc = desc_entry.get().strip()
@@ -93,10 +84,8 @@ def add_record(date_entry, temp_entry, desc_entry, precip_var, table_frame) -> N
         status_label.config(text=f"Ошибка: {err}", fg="red")
         return
 
-    records.append(WeatherRecord(
-        date=date, temperature=float(temp),
-        description=desc, precipitation=precipitation,
-    ))
+    records.append(WeatherRecord(date=date, temperature=float(temp),
+                                 description=desc, precipitation=precipitation))
     save_data()
     date_entry.delete(0, tk.END)
     temp_entry.delete(0, tk.END)
@@ -104,6 +93,71 @@ def add_record(date_entry, temp_entry, desc_entry, precip_var, table_frame) -> N
     precip_var.set(False)
     status_label.config(text=f"Запись за {date} добавлена!", fg="green")
     refresh_table(table_frame)
+
+
+def edit_record(table_frame) -> None:
+    """Окно редактирования выбранной записи."""
+    if not records:
+        status_label.config(text="Нет записей для редактирования", fg="red")
+        return
+
+    win = tk.Toplevel()
+    win.title("Редактирование записи")
+    win.geometry("500x350")
+
+    tk.Label(win, text="Выберите запись:").pack(pady=5)
+    listbox = tk.Listbox(win, width=70, height=8)
+    listbox.pack(fill="both", expand=True, padx=10)
+
+    for i, rec in enumerate(records):
+        listbox.insert(tk.END,
+                       f"{i+1}. {rec.date} | {rec.temperature}°C | {rec.description}")
+
+    def apply_edit():
+        sel = listbox.curselection()
+        if not sel:
+            return
+        rec = records[sel[0]]
+        edit_win = tk.Toplevel(win)
+        edit_win.title("Новые данные")
+        edit_win.geometry("380x240")
+
+        tk.Label(edit_win, text="Дата:").grid(row=0, column=0, padx=5, pady=5)
+        e_date = tk.Entry(edit_win); e_date.insert(0, rec.date)
+        e_date.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(edit_win, text="Температура:").grid(row=1, column=0, padx=5, pady=5)
+        e_temp = tk.Entry(edit_win); e_temp.insert(0, str(rec.temperature))
+        e_temp.grid(row=1, column=1, padx=5, pady=5)
+
+        tk.Label(edit_win, text="Описание:").grid(row=2, column=0, padx=5, pady=5)
+        e_desc = tk.Entry(edit_win, width=30); e_desc.insert(0, rec.description)
+        e_desc.grid(row=2, column=1, padx=5, pady=5)
+
+        p_var = tk.BooleanVar(value=rec.precipitation)
+        tk.Checkbutton(edit_win, text="Осадки", variable=p_var
+                       ).grid(row=3, column=1, pady=5)
+
+        def save_changes():
+            ok, err = validate_record(e_date.get(), e_temp.get(), e_desc.get())
+            if not ok:
+                status_label.config(text=f"Ошибка: {err}", fg="red")
+                return
+            rec.date = e_date.get().strip()
+            rec.temperature = float(e_temp.get())
+            rec.description = e_desc.get().strip()
+            rec.precipitation = p_var.get()
+            save_data()
+            refresh_table(table_frame)
+            edit_win.destroy()
+            win.destroy()
+            status_label.config(text="Запись обновлена", fg="green")
+
+        tk.Button(edit_win, text="Сохранить", command=save_changes,
+                  bg="green", fg="white").grid(row=4, column=0, columnspan=2, pady=10)
+
+    tk.Button(win, text="Редактировать", command=apply_edit,
+              bg="blue", fg="white").pack(pady=10)
 
 
 def filter_by_date(filter_date_entry, table_frame) -> None:
@@ -157,19 +211,16 @@ def delete_record(table_frame) -> None:
     listbox.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
 
     for i, rec in enumerate(records):
-        listbox.insert(
-            tk.END,
-            f"{i+1}. {rec.date} | {rec.temperature}°C | "
-            f"{rec.description} | Осадки: {rec.precip_text()}"
-        )
+        listbox.insert(tk.END,
+                       f"{i+1}. {rec.date} | {rec.temperature}°C | "
+                       f"{rec.description} | Осадки: {rec.precip_text()}")
 
     def delete_selected():
         selected = listbox.curselection()
         if not selected:
             status_label.config(text="Ошибка: Выберите запись для удаления!", fg="red")
             return
-        index = selected[0]
-        deleted_rec = records.pop(index)
+        deleted_rec = records.pop(selected[0])
         save_data()
         refresh_table(table_frame)
         selection_window.destroy()
@@ -184,7 +235,7 @@ def main() -> None:
 
     root = tk.Tk()
     root.title("Weather Diary - Дневник погоды")
-    root.geometry("900x650")
+    root.geometry("950x680")
     root.configure(bg="#f0f0f0")
 
     load_data()
@@ -218,13 +269,16 @@ def main() -> None:
     button_frame = tk.Frame(root, bg="#f0f0f0")
     button_frame.pack(fill="x", padx=10, pady=5)
 
-    tk.Button(button_frame, text="ДОБАВИТЬ ЗАПИСЬ", bg="green", fg="white",
+    tk.Button(button_frame, text="ДОБАВИТЬ", bg="green", fg="white",
               font=("Arial", 10, "bold"),
               command=lambda: add_record(date_entry, temp_entry, desc_entry,
                                          precip_var, table_frame)
               ).pack(side="left", padx=5)
-
-    tk.Button(button_frame, text="УДАЛИТЬ ЗАПИСЬ", bg="red", fg="white",
+    tk.Button(button_frame, text="РЕДАКТИРОВАТЬ", bg="blue", fg="white",
+              font=("Arial", 10, "bold"),
+              command=lambda: edit_record(table_frame)
+              ).pack(side="left", padx=5)
+    tk.Button(button_frame, text="УДАЛИТЬ", bg="red", fg="white",
               font=("Arial", 10, "bold"),
               command=lambda: delete_record(table_frame)
               ).pack(side="left", padx=5)
