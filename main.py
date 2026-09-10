@@ -1,23 +1,21 @@
 """
 Weather Diary — дневник погоды.
 Главный модуль приложения (GUI на tkinter).
-Использует models, storage и validators.
 """
 import tkinter as tk
 
 from models import WeatherRecord
 from storage import load_records, save_records
 from validators import validate_date, validate_temperature, validate_record
+from statistics import summary
 
 
-# ---------- Глобальное состояние ----------
-records = []                    # список WeatherRecord
-current_filter_date = ""        # активный фильтр по точной дате
-current_filter_temp = None      # активный фильтр по температуре
-status_label = None             # ссылка на статус-бар (создаётся в main())
+records = []
+current_filter_date = ""
+current_filter_temp = None
+status_label = None
 
 
-# ---------- Работа с данными ----------
 def load_data() -> None:
     """Загружает записи из JSON в глобальный список records."""
     global records
@@ -29,7 +27,6 @@ def save_data() -> None:
     save_records(records)
 
 
-# ---------- Отображение таблицы ----------
 def clear_table(table_frame: tk.Frame) -> None:
     """Удаляет все виджеты из таблицы."""
     for widget in table_frame.winfo_children():
@@ -67,28 +64,23 @@ def display_records(table_frame: tk.Frame, record_list: list) -> None:
 
 
 def refresh_table(table_frame: tk.Frame) -> None:
-    """Обновляет таблицу с учётом активных фильтров."""
+    """Обновляет таблицу и панель статистики с учётом фильтров."""
     filtered = filter_records()
     display_records(table_frame, filtered)
+    stats_label.config(text=summary(filtered))
 
 
-# ---------- Фильтрация ----------
 def filter_records() -> list:
-    """Возвращает список записей, отфильтрованный по текущим условиям."""
+    """Возвращает отфильтрованный список записей."""
     global current_filter_date, current_filter_temp
-
     filtered = records.copy()
-
     if current_filter_date:
         filtered = [r for r in filtered if r.date == current_filter_date]
-
     if current_filter_temp is not None:
         filtered = [r for r in filtered if r.temperature > current_filter_temp]
-
     return filtered
 
 
-# ---------- Действия пользователя ----------
 def add_record(date_entry, temp_entry, desc_entry, precip_var, table_frame) -> None:
     """Добавляет новую запись о погоде."""
     date = date_entry.get().strip()
@@ -102,45 +94,34 @@ def add_record(date_entry, temp_entry, desc_entry, precip_var, table_frame) -> N
         return
 
     records.append(WeatherRecord(
-        date=date,
-        temperature=float(temp),
-        description=desc,
-        precipitation=precipitation,
+        date=date, temperature=float(temp),
+        description=desc, precipitation=precipitation,
     ))
     save_data()
-
     date_entry.delete(0, tk.END)
     temp_entry.delete(0, tk.END)
     desc_entry.delete(0, tk.END)
     precip_var.set(False)
-
     status_label.config(text=f"Запись за {date} добавлена!", fg="green")
     refresh_table(table_frame)
 
 
 def filter_by_date(filter_date_entry, table_frame) -> None:
-    """Применяет фильтр по точной дате."""
     global current_filter_date
     date_str = filter_date_entry.get().strip()
-
     if date_str and not validate_date(date_str):
         status_label.config(text="Ошибка: Неверный формат даты для фильтра!", fg="red")
         return
-
     current_filter_date = date_str
     refresh_table(table_frame)
-
-    if current_filter_date:
-        status_label.config(text=f"Фильтр по дате: {current_filter_date}", fg="blue")
-    else:
-        status_label.config(text="Фильтр по дате сброшен", fg="blue")
+    status_label.config(
+        text=f"Фильтр по дате: {current_filter_date}" if current_filter_date
+        else "Фильтр по дате сброшен", fg="blue")
 
 
 def filter_by_temp(filter_temp_entry, table_frame) -> None:
-    """Применяет фильтр по температуре (показать выше порога)."""
     global current_filter_temp
     temp_str = filter_temp_entry.get().strip()
-
     if temp_str:
         if not validate_temperature(temp_str):
             status_label.config(text="Ошибка: Температура фильтра должна быть числом!", fg="red")
@@ -148,17 +129,13 @@ def filter_by_temp(filter_temp_entry, table_frame) -> None:
         current_filter_temp = float(temp_str)
     else:
         current_filter_temp = None
-
     refresh_table(table_frame)
-
-    if current_filter_temp is not None:
-        status_label.config(text=f"Фильтр: температура > {current_filter_temp}°C", fg="blue")
-    else:
-        status_label.config(text="Фильтр по температуре сброшен", fg="blue")
+    status_label.config(
+        text=f"Фильтр: температура > {current_filter_temp}°C" if current_filter_temp is not None
+        else "Фильтр по температуре сброшен", fg="blue")
 
 
 def reset_filters(filter_date_entry, filter_temp_entry, table_frame) -> None:
-    """Сбрасывает все активные фильтры."""
     global current_filter_date, current_filter_temp
     current_filter_date = ""
     current_filter_temp = None
@@ -169,7 +146,6 @@ def reset_filters(filter_date_entry, filter_temp_entry, table_frame) -> None:
 
 
 def delete_record(table_frame) -> None:
-    """Открывает окно удаления выбранной записи."""
     selection_window = tk.Toplevel()
     selection_window.title("Удаление записи о погоде")
     selection_window.geometry("500x350")
@@ -203,19 +179,16 @@ def delete_record(table_frame) -> None:
               command=delete_selected, bg="red", fg="white").pack(pady=10)
 
 
-# ---------- Точка входа ----------
 def main() -> None:
-    """Создаёт GUI и запускает главный цикл."""
     global status_label
 
     root = tk.Tk()
     root.title("Weather Diary - Дневник погоды")
-    root.geometry("900x600")
+    root.geometry("900x650")
     root.configure(bg="#f0f0f0")
 
     load_data()
 
-    # --- Фрейм добавления записи ---
     input_frame = tk.Frame(root, bg="#f0f0f0", bd=2, relief="groove")
     input_frame.pack(fill="x", padx=10, pady=10)
 
@@ -242,7 +215,6 @@ def main() -> None:
     tk.Checkbutton(input_frame, text="Осадки", variable=precip_var, bg="#f0f0f0"
                    ).grid(row=2, column=3, padx=5, pady=5, sticky="w")
 
-    # --- Кнопки действий ---
     button_frame = tk.Frame(root, bg="#f0f0f0")
     button_frame.pack(fill="x", padx=10, pady=5)
 
@@ -257,7 +229,6 @@ def main() -> None:
               command=lambda: delete_record(table_frame)
               ).pack(side="left", padx=5)
 
-    # --- Фрейм фильтрации ---
     filter_frame = tk.Frame(root, bg="#f0f0f0", bd=2, relief="groove")
     filter_frame.pack(fill="x", padx=10, pady=10)
 
@@ -285,16 +256,21 @@ def main() -> None:
                                             filter_temp_entry, table_frame)
               ).grid(row=1, column=3, rowspan=2, padx=20)
 
-    # --- Статус-бар ---
     status_label = tk.Label(root, text="Готов к работе", relief="sunken",
                             anchor="w", bg="#ffffcc")
     status_label.pack(fill="x", side="bottom", padx=10, pady=5)
 
-    # --- Таблица ---
     table_frame = tk.Frame(root, bg="white")
     table_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
+    stats_frame = tk.Frame(root, bg="#e0e8f0", bd=2, relief="groove")
+    stats_frame.pack(fill="x", padx=10, pady=5)
+    stats_label = tk.Label(stats_frame, text=summary(records),
+                           font=("Arial", 10), bg="#e0e8f0")
+    stats_label.pack(pady=5)
+
     display_records(table_frame, records)
+    stats_label.config(text=summary(records))
 
     root.mainloop()
 
