@@ -305,7 +305,6 @@ def do_import(table_frame) -> None:
 
 
 def apply_theme(root, theme_name, table_frame) -> None:
-    """Применяет цветовую тему ко всем виджетам."""
     global current_theme
     current_theme = theme_name
     theme = get_theme(theme_name)
@@ -330,10 +329,30 @@ def apply_theme(root, theme_name, table_frame) -> None:
 
 
 def toggle_theme(root, table_frame) -> None:
-    """Переключает светлую/тёмную тему."""
     new_theme = "dark" if current_theme == "light" else "light"
     apply_theme(root, new_theme, table_frame)
     status_label.config(text=f"Тема: {new_theme}", fg="blue")
+
+
+def show_about() -> None:
+    """Показывает окно с информацией о программе."""
+    about = tk.Toplevel()
+    about.title("О программе")
+    about.geometry("420x280")
+    about.resizable(False, False)
+
+    info = (
+        "Weather Diary — Дневник погоды\n\n"
+        "Автор: Валеев Кирилл\n"
+        "Версия: 2.0\n"
+        "Дата создания: Апрель 2026\n\n"
+        "Приложение для ведения ежедневных записей\n"
+        "о погоде с фильтрацией, статистикой,\n"
+        "экспортом в CSV и поддержкой тем."
+    )
+    tk.Label(about, text=info, justify="left", padx=20, pady=20,
+             font=("Arial", 10)).pack()
+    tk.Button(about, text="Закрыть", command=about.destroy).pack(pady=10)
 
 
 def delete_record(table_frame) -> None:
@@ -421,6 +440,10 @@ def main() -> None:
     tk.Button(button_frame, text="СМЕНИТЬ ТЕМУ", bg="#666", fg="white",
               font=("Arial", 10, "bold"),
               command=lambda: toggle_theme(root, table_frame)
+              ).pack(side="left", padx=5)
+    tk.Button(button_frame, text="О ПРОГРАММЕ", bg="#888", fg="white",
+              font=("Arial", 10, "bold"),
+              command=show_about
               ).pack(side="left", padx=5)
 
     filter_frame = tk.Frame(root, bg="#f0f0f0", bd=2, relief="groove")
