@@ -3,12 +3,14 @@ Weather Diary — дневник погоды.
 Главный модуль приложения (GUI на tkinter).
 """
 import tkinter as tk
+from tkinter import filedialog, messagebox
 
 from models import WeatherRecord
 from storage import load_records, save_records
 from validators import validate_date, validate_temperature, validate_record
 from statistics import summary
-from exporters import export_to_csv
+from exporters import export_to_csv, import_from_csv
+
 
 records = []
 current_filter_date = ""
@@ -21,16 +23,6 @@ status_label = None
 sort_column = None
 sort_reverse = False
 
-def do_export(table_frame) -> None:
-    """Экспорт отфильтрованных записей в CSV."""
-    rows = filter_records()
-    if not rows:
-        status_label.config(text="Нечего экспортировать", fg="red")
-        return
-    if export_to_csv(rows):
-        status_label.config(text="Экспорт в weather_export.csv выполнен", fg="green")
-    else:
-        status_label.config(text="Ошибка экспорта", fg="red")
 
 def load_data() -> None:
     global records
@@ -69,7 +61,6 @@ def sort_by(column, table_frame) -> None:
 
 def display_records(table_frame: tk.Frame, record_list: list) -> None:
     clear_table(table_frame)
-    # 5 столбцов: иконка + 4 обычных
     headers = [("Дата", "date"), ("", None), ("Температура", "temperature"),
                ("Описание", "description"), ("Осадки", "precipitation")]
     for col, (header, key) in enumerate(headers):
@@ -286,6 +277,33 @@ def reset_filters(filter_date_entry, filter_temp_entry, search_entry,
     status_label.config(text="Фильтры сброшены", fg="blue")
 
 
+def do_export(table_frame) -> None:
+    """Экспорт отфильтрованных записей в CSV."""
+    rows = filter_records()
+    if not rows:
+        status_label.config(text="Нечего экспортировать", fg="red")
+        return
+    if export_to_csv(rows):
+        status_label.config(text="Экспорт в weather_export.csv выполнен", fg="green")
+    else:
+        status_label.config(text="Ошибка экспорта", fg="red")
+
+
+def do_import(table_frame) -> None:
+    """Импорт записей из CSV-файла с добавлением к существующим."""
+    path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+    if not path:
+        return
+    imported = import_from_csv(path)
+    if not imported:
+        status_label.config(text="Не удалось импортировать записи", fg="red")
+        return
+    records.extend(imported)
+    save_data()
+    refresh_table(table_frame)
+    status_label.config(text=f"Импортировано записей: {len(imported)}", fg="green")
+
+
 def delete_record(table_frame) -> None:
     selection_window = tk.Toplevel()
     selection_window.title("Удаление записи о погоде")
@@ -312,10 +330,6 @@ def delete_record(table_frame) -> None:
 
     tk.Button(selection_window, text="Удалить",
               command=delete_selected, bg="red", fg="white").pack(pady=10)
-    tk.Button(button_frame, text="ЭКСПОРТ В CSV", bg="#4a90d9", fg="white",
-          font=("Arial", 10, "bold"),
-          command=lambda: do_export(table_frame)
-          ).pack(side="left", padx=5)
 
 
 def main() -> None:
@@ -323,7 +337,7 @@ def main() -> None:
 
     root = tk.Tk()
     root.title("Weather Diary - Дневник погоды")
-    root.geometry("950x800")
+    root.geometry("1000x820")
     root.configure(bg="#f0f0f0")
 
     load_data()
@@ -363,6 +377,14 @@ def main() -> None:
     tk.Button(button_frame, text="УДАЛИТЬ", bg="red", fg="white",
               font=("Arial", 10, "bold"),
               command=lambda: delete_record(table_frame)
+              ).pack(side="left", padx=5)
+    tk.Button(button_frame, text="ЭКСПОРТ В CSV", bg="#4a90d9", fg="white",
+              font=("Arial", 10, "bold"),
+              command=lambda: do_export(table_frame)
+              ).pack(side="left", padx=5)
+    tk.Button(button_frame, text="ИМПОРТ ИЗ CSV", bg="#4a90d9", fg="white",
+              font=("Arial", 10, "bold"),
+              command=lambda: do_import(table_frame)
               ).pack(side="left", padx=5)
 
     filter_frame = tk.Frame(root, bg="#f0f0f0", bd=2, relief="groove")

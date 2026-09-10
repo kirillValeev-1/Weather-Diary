@@ -27,3 +27,26 @@ def export_to_txt(records: List[WeatherRecord], path: str = "weather_export.txt"
         return True
     except OSError:
         return False
+    
+def import_from_csv(path: str) -> List[WeatherRecord]:
+    """Импорт записей из CSV-файла."""
+    result: List[WeatherRecord] = []
+    try:
+        with open(path, "r", encoding="utf-8", newline="") as f:
+            reader = csv.reader(f)
+            next(reader, None)  # пропустить заголовок
+            for row in reader:
+                if len(row) < 4:
+                    continue
+                try:
+                    result.append(WeatherRecord(
+                        date=row[0].strip(),
+                        temperature=float(row[1]),
+                        description=row[2].strip(),
+                        precipitation=row[3].strip().lower() in ("да", "yes", "true", "1"),
+                    ))
+                except (ValueError, IndexError):
+                    continue
+    except OSError:
+        return []
+    return result
