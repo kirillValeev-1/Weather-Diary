@@ -29,14 +29,22 @@ chart_canvas = None
 
 
 def load_data() -> None:
-    """Загружает записи из хранилища в глобальный список records."""
     global records
     records = load_records()
 
 
 def save_data() -> None:
-    """Сохраняет текущий список записей в JSON-файл."""
     save_records(records)
+
+
+def check_duplicate_date(date: str, ignore_index: int = -1) -> bool:
+    """Проверяет, есть ли уже запись с такой датой (кроме указанной по индексу)."""
+    for i, rec in enumerate(records):
+        if i == ignore_index:
+            continue
+        if rec.date == date:
+            return True
+    return False
 
 
 def clear_table(table_frame: tk.Frame) -> None:
@@ -100,7 +108,6 @@ def display_records(table_frame: tk.Frame, record_list: list) -> None:
 
 
 def refresh_table(table_frame: tk.Frame) -> None:
-    """Обновляет таблицу, статистику и график с учётом фильтров."""
     filtered = filter_records()
     display_records(table_frame, filtered)
     stats_label.config(text=summary(filtered))
@@ -137,6 +144,11 @@ def add_record(date_entry, temp_entry, desc_entry, precip_var, table_frame) -> N
     if not ok:
         status_label.config(text=f"Ошибка: {err}", fg="red")
         return
+    if check_duplicate_date(date):
+        status_label.config(
+            text=f"Запись за {date} уже существует. Отредактируйте её или выберите другую дату.",
+            fg="red")
+        return
     records.append(WeatherRecord(date=date, temperature=float(temp),
                                  description=desc, precipitation=precipitation))
     save_data()
@@ -166,7 +178,8 @@ def edit_record(table_frame) -> None:
         sel = listbox.curselection()
         if not sel:
             return
-        rec = records[sel[0]]
+        idx = sel[0]
+        rec = records[idx]
         edit_win = tk.Toplevel(win)
         edit_win.title("Новые данные")
         edit_win.geometry("380x240")
@@ -188,7 +201,12 @@ def edit_record(table_frame) -> None:
             if not ok:
                 status_label.config(text=f"Ошибка: {err}", fg="red")
                 return
-            rec.date = e_date.get().strip()
+            new_date = e_date.get().strip()
+            if check_duplicate_date(new_date, ignore_index=idx):
+                status_label.config(
+                    text=f"Запись за {new_date} уже существует", fg="red")
+                return
+            rec.date = new_date
             rec.temperature = float(e_temp.get())
             rec.description = e_desc.get().strip()
             rec.precipitation = p_var.get()
@@ -306,10 +324,16 @@ def do_import(table_frame) -> None:
     if not imported:
         status_label.config(text="Не удалось импортировать записи", fg="red")
         return
-    records.extend(imported)
+    added = 0
+    for rec in imported:
+        if not check_duplicate_date(rec.date):
+            records.append(rec)
+            added += 1
     save_data()
     refresh_table(table_frame)
-    status_label.config(text=f"Импортировано записей: {len(imported)}", fg="green")
+    status_label.config(
+        text=f"Импортировано: {added} из {len(imported)} (дубликаты пропущены)",
+        fg="green")
 
 
 def apply_theme(root, theme_name, table_frame) -> None:
@@ -350,11 +374,11 @@ def show_about() -> None:
     info = (
         "Weather Diary — Дневник погоды\n\n"
         "Автор: Валеев Кирилл\n"
-        "Версия: 2.1\n"
+        "Версия: 2.2\n"
         "Дата создания: Апрель 2026\n\n"
-        "Приложение с фильтрацией, статистикой,\n"
-        "графиком температур, экспортом в CSV\n"
-        "и поддержкой светлой/тёмной тем."
+        "Защита от дубликатов, горячие клавиши,\n"
+        "график температур, экспорт/импорт CSV,\n"
+        "светлая и тёмная темы."
     )
     tk.Label(about, text=info, justify="left", padx=20, pady=20,
              font=("Arial", 10)).pack()
@@ -387,6 +411,30 @@ def delete_record(table_frame) -> None:
 
     tk.Button(selection_window, text="Удалить",
               command=delete_selected, bg="red", fg="white").pack(pady=10)
+
+
+def bind_hotkeys(root, table_frame, date_entry, temp_entry, desc_entry,
+                 precip_var, filter_date_entry, filter_temp_entry,
+                 search_entry, range_from, range_to, precip_filter_var) -> None:
+    """Регистрирует глобальные горячие клавиши приложения."""
+    root.bind("<Control-s>",
+              lambda e: (save_data(),
+                         status_label.config(text="Сохранено (Ctrl+S)", fg="green")))
+    root.bind("<Control-e>", lambda e: do_export(table_frame))
+    root.bind("<Control-i>", lambda e: do_import(table_frame))
+    root.bind("<Control-t>", lambda e: toggle_theme(root, table_frame))
+    root.bind("<Control-r>",
+              lambda e: reset_filters(filter_date_entry, filter_temp_entry,
+                                      search_entry, range_from, range_to,
+                                      precip_filter_var, table_frame))
+    root.bind("<F1>", lambda e: show_about())
+    root.bind("<F5>",
+              lambda e: (refresh_table(table_frame),
+                         status_label.config(text="Таблица обновлена (F5)", fg="blue")))
+    root.bind("<Delete>", lambda e: delete_record(table_frame))
+    root.bind("<Return>",
+              lambda e: add_record(date_entry, temp_entry, desc_entry,
+                                   precip_var, table_frame))
 
 
 def main() -> None:
@@ -505,8 +553,8 @@ def main() -> None:
                                             precip_filter_var, table_frame)
               ).grid(row=1, column=3, rowspan=5, padx=20)
 
-    status_label = tk.Label(root, text="Готов к работе", relief="sunken",
-                            anchor="w", bg="#ffffcc")
+    status_label = tk.Label(root, text="Готов к работе (F1 — справка)",
+                            relief="sunken", anchor="w", bg="#ffffcc")
     status_label.pack(fill="x", side="bottom", padx=10, pady=5)
 
     table_frame = tk.Frame(root, bg="white")
@@ -530,11 +578,15 @@ def main() -> None:
     stats_label.config(text=summary(records))
     draw_temperature_chart(chart_canvas, records)
 
-    # Перерисовка графика при изменении размеров окна
     chart_canvas.bind("<Configure>",
                       lambda e: draw_temperature_chart(chart_canvas,
                                                        filter_records(),
                                                        width=e.width))
+
+    # Горячие клавиши
+    bind_hotkeys(root, table_frame, date_entry, temp_entry, desc_entry,
+                 precip_var, filter_date_entry, filter_temp_entry,
+                 search_entry, range_from, range_to, precip_filter_var)
 
     root.mainloop()
 
