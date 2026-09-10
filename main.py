@@ -11,6 +11,7 @@ from validators import validate_date, validate_temperature, validate_record
 from statistics import summary
 from exporters import export_to_csv, import_from_csv
 from themes import get_theme
+from chart import draw_temperature_chart
 
 
 records: list = []
@@ -24,6 +25,7 @@ status_label = None
 sort_column = None
 sort_reverse: bool = False
 current_theme: str = "light"
+chart_canvas = None
 
 
 def load_data() -> None:
@@ -38,13 +40,11 @@ def save_data() -> None:
 
 
 def clear_table(table_frame: tk.Frame) -> None:
-    """Удаляет все виджеты из таблицы."""
     for widget in table_frame.winfo_children():
         widget.destroy()
 
 
 def sort_by(column, table_frame: tk.Frame) -> None:
-    """Сортирует записи по столбцу и перерисовывает таблицу."""
     global records, sort_column, sort_reverse
     if sort_column == column:
         sort_reverse = not sort_reverse
@@ -66,7 +66,6 @@ def sort_by(column, table_frame: tk.Frame) -> None:
 
 
 def display_records(table_frame: tk.Frame, record_list: list) -> None:
-    """Отображает список записей в виде таблицы."""
     clear_table(table_frame)
     headers = [("Дата", "date"), ("", None), ("Температура", "temperature"),
                ("Описание", "description"), ("Осадки", "precipitation")]
@@ -101,14 +100,16 @@ def display_records(table_frame: tk.Frame, record_list: list) -> None:
 
 
 def refresh_table(table_frame: tk.Frame) -> None:
-    """Обновляет таблицу и панель статистики с учётом активных фильтров."""
+    """Обновляет таблицу, статистику и график с учётом фильтров."""
     filtered = filter_records()
     display_records(table_frame, filtered)
     stats_label.config(text=summary(filtered))
+    if chart_canvas is not None:
+        draw_temperature_chart(chart_canvas, filtered,
+                               width=chart_canvas.winfo_width() or 900)
 
 
 def filter_records() -> list:
-    """Возвращает отфильтрованный список записей по всем активным фильтрам."""
     global current_filter_date, current_filter_temp, current_search
     global date_from, date_to, only_precipitation
     filtered = records.copy()
@@ -127,9 +128,7 @@ def filter_records() -> list:
     return filtered
 
 
-def add_record(date_entry, temp_entry, desc_entry, precip_var,
-               table_frame: tk.Frame) -> None:
-    """Добавляет новую запись о погоде."""
+def add_record(date_entry, temp_entry, desc_entry, precip_var, table_frame) -> None:
     date = date_entry.get().strip()
     temp = temp_entry.get().strip()
     desc = desc_entry.get().strip()
@@ -149,8 +148,7 @@ def add_record(date_entry, temp_entry, desc_entry, precip_var,
     refresh_table(table_frame)
 
 
-def edit_record(table_frame: tk.Frame) -> None:
-    """Открывает окно редактирования выбранной записи."""
+def edit_record(table_frame) -> None:
     if not records:
         status_label.config(text="Нет записей для редактирования", fg="red")
         return
@@ -207,8 +205,7 @@ def edit_record(table_frame: tk.Frame) -> None:
               bg="blue", fg="white").pack(pady=10)
 
 
-def filter_by_date(filter_date_entry, table_frame: tk.Frame) -> None:
-    """Применяет фильтр по точной дате."""
+def filter_by_date(filter_date_entry, table_frame) -> None:
     global current_filter_date
     date_str = filter_date_entry.get().strip()
     if date_str and not validate_date(date_str):
@@ -221,8 +218,7 @@ def filter_by_date(filter_date_entry, table_frame: tk.Frame) -> None:
         else "Фильтр по дате сброшен", fg="blue")
 
 
-def filter_by_temp(filter_temp_entry, table_frame: tk.Frame) -> None:
-    """Применяет фильтр по температуре (показать выше порога)."""
+def filter_by_temp(filter_temp_entry, table_frame) -> None:
     global current_filter_temp
     temp_str = filter_temp_entry.get().strip()
     if temp_str:
@@ -238,8 +234,7 @@ def filter_by_temp(filter_temp_entry, table_frame: tk.Frame) -> None:
         else "Фильтр по температуре сброшен", fg="blue")
 
 
-def search_records(query: str, table_frame: tk.Frame) -> None:
-    """Применяет поиск по описанию."""
+def search_records(query, table_frame) -> None:
     global current_search
     current_search = query.strip().lower()
     refresh_table(table_frame)
@@ -248,8 +243,7 @@ def search_records(query: str, table_frame: tk.Frame) -> None:
         fg="blue")
 
 
-def filter_by_range(from_entry, to_entry, table_frame: tk.Frame) -> None:
-    """Применяет фильтр по диапазону дат."""
+def filter_by_range(from_entry, to_entry, table_frame) -> None:
     global date_from, date_to
     d1 = from_entry.get().strip()
     d2 = to_entry.get().strip()
@@ -264,8 +258,7 @@ def filter_by_range(from_entry, to_entry, table_frame: tk.Frame) -> None:
     status_label.config(text=f"Диапазон: {d1 or '...'} — {d2 or '...'}", fg="blue")
 
 
-def toggle_precip_filter(var, table_frame: tk.Frame) -> None:
-    """Включает/отключает фильтр «только с осадками»."""
+def toggle_precip_filter(var, table_frame) -> None:
     global only_precipitation
     only_precipitation = var.get()
     refresh_table(table_frame)
@@ -275,8 +268,7 @@ def toggle_precip_filter(var, table_frame: tk.Frame) -> None:
 
 
 def reset_filters(filter_date_entry, filter_temp_entry, search_entry,
-                  range_from, range_to, precip_var, table_frame: tk.Frame) -> None:
-    """Сбрасывает все активные фильтры и очищает поля ввода."""
+                  range_from, range_to, precip_var, table_frame) -> None:
     global current_filter_date, current_filter_temp, current_search
     global date_from, date_to, only_precipitation
     current_filter_date = ""
@@ -295,8 +287,7 @@ def reset_filters(filter_date_entry, filter_temp_entry, search_entry,
     status_label.config(text="Фильтры сброшены", fg="blue")
 
 
-def do_export(table_frame: tk.Frame) -> None:
-    """Экспортирует отфильтрованные записи в CSV-файл."""
+def do_export(table_frame) -> None:
     rows = filter_records()
     if not rows:
         status_label.config(text="Нечего экспортировать", fg="red")
@@ -307,8 +298,7 @@ def do_export(table_frame: tk.Frame) -> None:
         status_label.config(text="Ошибка экспорта", fg="red")
 
 
-def do_import(table_frame: tk.Frame) -> None:
-    """Импортирует записи из CSV-файла, добавляя их к существующим."""
+def do_import(table_frame) -> None:
     path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
     if not path:
         return
@@ -322,8 +312,7 @@ def do_import(table_frame: tk.Frame) -> None:
     status_label.config(text=f"Импортировано записей: {len(imported)}", fg="green")
 
 
-def apply_theme(root: tk.Tk, theme_name: str, table_frame: tk.Frame) -> None:
-    """Применяет цветовую тему ко всем виджетам окна."""
+def apply_theme(root, theme_name, table_frame) -> None:
     global current_theme
     current_theme = theme_name
     theme = get_theme(theme_name)
@@ -347,15 +336,13 @@ def apply_theme(root: tk.Tk, theme_name: str, table_frame: tk.Frame) -> None:
     refresh_table(table_frame)
 
 
-def toggle_theme(root: tk.Tk, table_frame: tk.Frame) -> None:
-    """Переключает светлую/тёмную тему."""
+def toggle_theme(root, table_frame) -> None:
     new_theme = "dark" if current_theme == "light" else "light"
     apply_theme(root, new_theme, table_frame)
     status_label.config(text=f"Тема: {new_theme}", fg="blue")
 
 
 def show_about() -> None:
-    """Показывает окно с информацией о программе."""
     about = tk.Toplevel()
     about.title("О программе")
     about.geometry("420x280")
@@ -363,19 +350,18 @@ def show_about() -> None:
     info = (
         "Weather Diary — Дневник погоды\n\n"
         "Автор: Валеев Кирилл\n"
-        "Версия: 2.0\n"
+        "Версия: 2.1\n"
         "Дата создания: Апрель 2026\n\n"
-        "Приложение для ведения ежедневных записей\n"
-        "о погоде с фильтрацией, статистикой,\n"
-        "экспортом в CSV и поддержкой тем."
+        "Приложение с фильтрацией, статистикой,\n"
+        "графиком температур, экспортом в CSV\n"
+        "и поддержкой светлой/тёмной тем."
     )
     tk.Label(about, text=info, justify="left", padx=20, pady=20,
              font=("Arial", 10)).pack()
     tk.Button(about, text="Закрыть", command=about.destroy).pack(pady=10)
 
 
-def delete_record(table_frame: tk.Frame) -> None:
-    """Открывает окно удаления выбранной записи."""
+def delete_record(table_frame) -> None:
     selection_window = tk.Toplevel()
     selection_window.title("Удаление записи о погоде")
     selection_window.geometry("500x350")
@@ -404,12 +390,11 @@ def delete_record(table_frame: tk.Frame) -> None:
 
 
 def main() -> None:
-    """Создаёт GUI и запускает главный цикл приложения."""
-    global status_label
+    global status_label, chart_canvas
 
     root = tk.Tk()
     root.title("Weather Diary - Дневник погоды")
-    root.geometry("1000x820")
+    root.geometry("1000x950")
     root.configure(bg="#f0f0f0")
 
     load_data()
@@ -472,7 +457,6 @@ def main() -> None:
     tk.Label(filter_frame, text="ФИЛЬТРАЦИЯ И ПОИСК",
              font=("Arial", 10, "bold"), bg="#f0f0f0"
              ).grid(row=0, column=0, columnspan=4, pady=5)
-
     tk.Label(filter_frame, text="По дате:", bg="#f0f0f0"
              ).grid(row=1, column=0, padx=5, pady=5, sticky="e")
     filter_date_entry = tk.Entry(filter_frame, width=15)
@@ -534,8 +518,23 @@ def main() -> None:
                            font=("Arial", 10), bg="#e0e8f0")
     stats_label.pack(pady=5)
 
+    chart_frame = tk.Frame(root, bg="#fafafa", bd=2, relief="groove")
+    chart_frame.pack(fill="x", padx=10, pady=5)
+    tk.Label(chart_frame, text="ГРАФИК ТЕМПЕРАТУР",
+             font=("Arial", 10, "bold"), bg="#fafafa").pack(pady=3)
+    chart_canvas = tk.Canvas(chart_frame, width=900, height=180,
+                             bg="white", highlightthickness=0)
+    chart_canvas.pack(padx=10, pady=5, fill="x")
+
     display_records(table_frame, records)
     stats_label.config(text=summary(records))
+    draw_temperature_chart(chart_canvas, records)
+
+    # Перерисовка графика при изменении размеров окна
+    chart_canvas.bind("<Configure>",
+                      lambda e: draw_temperature_chart(chart_canvas,
+                                                       filter_records(),
+                                                       width=e.width))
 
     root.mainloop()
 
