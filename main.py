@@ -16,6 +16,7 @@ current_filter_temp = None
 current_search = ""
 date_from = ""
 date_to = ""
+only_precipitation = False
 status_label = None
 sort_column = None
 sort_reverse = False
@@ -91,7 +92,7 @@ def refresh_table(table_frame: tk.Frame) -> None:
 
 def filter_records() -> list:
     global current_filter_date, current_filter_temp, current_search
-    global date_from, date_to
+    global date_from, date_to, only_precipitation
     filtered = records.copy()
     if current_filter_date:
         filtered = [r for r in filtered if r.date == current_filter_date]
@@ -103,6 +104,8 @@ def filter_records() -> list:
         filtered = [r for r in filtered if r.date >= date_from]
     if date_to:
         filtered = [r for r in filtered if r.date <= date_to]
+    if only_precipitation:
+        filtered = [r for r in filtered if r.precipitation]
     return filtered
 
 
@@ -222,7 +225,6 @@ def search_records(query, table_frame) -> None:
 
 
 def filter_by_range(from_entry, to_entry, table_frame) -> None:
-    """Применяет фильтр по диапазону дат."""
     global date_from, date_to
     d1 = from_entry.get().strip()
     d2 = to_entry.get().strip()
@@ -237,15 +239,27 @@ def filter_by_range(from_entry, to_entry, table_frame) -> None:
     status_label.config(text=f"Диапазон: {d1 or '...'} — {d2 or '...'}", fg="blue")
 
 
+def toggle_precip_filter(var, table_frame) -> None:
+    """Включает/отключает фильтр «только с осадками»."""
+    global only_precipitation
+    only_precipitation = var.get()
+    refresh_table(table_frame)
+    status_label.config(
+        text=f"Осадки: {'только с осадками' if only_precipitation else 'все'}",
+        fg="blue")
+
+
 def reset_filters(filter_date_entry, filter_temp_entry, search_entry,
-                  range_from, range_to, table_frame) -> None:
+                  range_from, range_to, precip_var, table_frame) -> None:
     global current_filter_date, current_filter_temp, current_search
-    global date_from, date_to
+    global date_from, date_to, only_precipitation
     current_filter_date = ""
     current_filter_temp = None
     current_search = ""
     date_from = ""
     date_to = ""
+    only_precipitation = False
+    precip_var.set(False)
     filter_date_entry.delete(0, tk.END)
     filter_temp_entry.delete(0, tk.END)
     search_entry.delete(0, tk.END)
@@ -288,7 +302,7 @@ def main() -> None:
 
     root = tk.Tk()
     root.title("Weather Diary - Дневник погоды")
-    root.geometry("950x780")
+    root.geometry("950x800")
     root.configure(bg="#f0f0f0")
 
     load_data()
@@ -372,11 +386,17 @@ def main() -> None:
               command=lambda: filter_by_range(range_from, range_to, table_frame)
               ).grid(row=4, column=3, padx=5)
 
+    precip_filter_var = tk.BooleanVar()
+    tk.Checkbutton(filter_frame, text="Только с осадками",
+                   variable=precip_filter_var, bg="#f0f0f0",
+                   command=lambda: toggle_precip_filter(precip_filter_var, table_frame)
+                   ).grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky="w")
+
     tk.Button(filter_frame, text="СБРОСИТЬ ВСЁ", bg="orange",
               command=lambda: reset_filters(filter_date_entry, filter_temp_entry,
                                             search_entry, range_from, range_to,
-                                            table_frame)
-              ).grid(row=1, column=3, rowspan=4, padx=20)
+                                            precip_filter_var, table_frame)
+              ).grid(row=1, column=3, rowspan=5, padx=20)
 
     status_label = tk.Label(root, text="Готов к работе", relief="sunken",
                             anchor="w", bg="#ffffcc")
