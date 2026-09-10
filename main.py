@@ -14,6 +14,8 @@ records = []
 current_filter_date = ""
 current_filter_temp = None
 status_label = None
+sort_column = None
+sort_reverse = False
 
 
 def load_data() -> None:
@@ -30,14 +32,40 @@ def clear_table(table_frame: tk.Frame) -> None:
         widget.destroy()
 
 
+def sort_by(column, table_frame) -> None:
+    """Сортирует записи по столбцу и перерисовывает таблицу."""
+    global records, sort_column, sort_reverse
+    if sort_column == column:
+        sort_reverse = not sort_reverse
+    else:
+        sort_column = column
+        sort_reverse = False
+
+    key_map = {
+        "date": lambda r: r.date,
+        "temperature": lambda r: r.temperature,
+        "description": lambda r: r.description.lower(),
+        "precipitation": lambda r: r.precipitation,
+    }
+    records.sort(key=key_map[column], reverse=sort_reverse)
+    save_data()
+    refresh_table(table_frame)
+    status_label.config(
+        text=f"Сортировка по '{column}' ({'убыв.' if sort_reverse else 'возр.'})",
+        fg="blue")
+
+
 def display_records(table_frame: tk.Frame, record_list: list) -> None:
     clear_table(table_frame)
 
-    headers = ["Дата", "Температура", "Описание", "Осадки"]
-    for col, header in enumerate(headers):
-        tk.Label(table_frame, text=header, font=("Arial", 10, "bold"),
-                 borderwidth=1, relief="solid", padx=10, pady=5,
-                 bg="lightgray").grid(row=0, column=col, sticky="nsew")
+    headers = [("Дата", "date"), ("Температура", "temperature"),
+               ("Описание", "description"), ("Осадки", "precipitation")]
+    for col, (header, key) in enumerate(headers):
+        lbl = tk.Label(table_frame, text=header, font=("Arial", 10, "bold"),
+                       borderwidth=1, relief="solid", padx=10, pady=5,
+                       bg="lightgray", cursor="hand2")
+        lbl.grid(row=0, column=col, sticky="nsew")
+        lbl.bind("<Button-1>", lambda e, k=key: sort_by(k, table_frame))
 
     for row, rec in enumerate(record_list, start=1):
         tk.Label(table_frame, text=rec.date,
@@ -96,7 +124,6 @@ def add_record(date_entry, temp_entry, desc_entry, precip_var, table_frame) -> N
 
 
 def edit_record(table_frame) -> None:
-    """Окно редактирования выбранной записи."""
     if not records:
         status_label.config(text="Нет записей для редактирования", fg="red")
         return
@@ -286,8 +313,9 @@ def main() -> None:
     filter_frame = tk.Frame(root, bg="#f0f0f0", bd=2, relief="groove")
     filter_frame.pack(fill="x", padx=10, pady=10)
 
-    tk.Label(filter_frame, text="ФИЛЬТРАЦИЯ", font=("Arial", 10, "bold"),
-             bg="#f0f0f0").grid(row=0, column=0, columnspan=4, pady=5)
+    tk.Label(filter_frame, text="ФИЛЬТРАЦИЯ (клик по заголовку — сортировка)",
+             font=("Arial", 10, "bold"), bg="#f0f0f0"
+             ).grid(row=0, column=0, columnspan=4, pady=5)
 
     tk.Label(filter_frame, text="По дате:", bg="#f0f0f0"
              ).grid(row=1, column=0, padx=5, pady=5, sticky="e")
