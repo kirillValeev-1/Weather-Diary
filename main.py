@@ -10,6 +10,7 @@ from storage import load_records, save_records
 from validators import validate_date, validate_temperature, validate_record
 from statistics import summary
 from exporters import export_to_csv, import_from_csv
+from themes import get_theme
 
 
 records = []
@@ -22,6 +23,7 @@ only_precipitation = False
 status_label = None
 sort_column = None
 sort_reverse = False
+current_theme = "light"
 
 
 def load_data() -> None:
@@ -278,7 +280,6 @@ def reset_filters(filter_date_entry, filter_temp_entry, search_entry,
 
 
 def do_export(table_frame) -> None:
-    """Экспорт отфильтрованных записей в CSV."""
     rows = filter_records()
     if not rows:
         status_label.config(text="Нечего экспортировать", fg="red")
@@ -290,7 +291,6 @@ def do_export(table_frame) -> None:
 
 
 def do_import(table_frame) -> None:
-    """Импорт записей из CSV-файла с добавлением к существующим."""
     path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
     if not path:
         return
@@ -302,6 +302,38 @@ def do_import(table_frame) -> None:
     save_data()
     refresh_table(table_frame)
     status_label.config(text=f"Импортировано записей: {len(imported)}", fg="green")
+
+
+def apply_theme(root, theme_name, table_frame) -> None:
+    """Применяет цветовую тему ко всем виджетам."""
+    global current_theme
+    current_theme = theme_name
+    theme = get_theme(theme_name)
+
+    def walk(widget):
+        try:
+            widget.configure(bg=theme["bg"])
+        except tk.TclError:
+            pass
+        if isinstance(widget, tk.Label):
+            try:
+                widget.configure(fg=theme["fg"])
+            except tk.TclError:
+                pass
+        for child in widget.winfo_children():
+            walk(child)
+
+    root.configure(bg=theme["bg"])
+    walk(root)
+    table_frame.configure(bg=theme["table_bg"])
+    refresh_table(table_frame)
+
+
+def toggle_theme(root, table_frame) -> None:
+    """Переключает светлую/тёмную тему."""
+    new_theme = "dark" if current_theme == "light" else "light"
+    apply_theme(root, new_theme, table_frame)
+    status_label.config(text=f"Тема: {new_theme}", fg="blue")
 
 
 def delete_record(table_frame) -> None:
@@ -385,6 +417,10 @@ def main() -> None:
     tk.Button(button_frame, text="ИМПОРТ ИЗ CSV", bg="#4a90d9", fg="white",
               font=("Arial", 10, "bold"),
               command=lambda: do_import(table_frame)
+              ).pack(side="left", padx=5)
+    tk.Button(button_frame, text="СМЕНИТЬ ТЕМУ", bg="#666", fg="white",
+              font=("Arial", 10, "bold"),
+              command=lambda: toggle_theme(root, table_frame)
               ).pack(side="left", padx=5)
 
     filter_frame = tk.Frame(root, bg="#f0f0f0", bd=2, relief="groove")
