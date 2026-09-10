@@ -11,7 +11,7 @@ from tkinter import filedialog, messagebox
 from models import WeatherRecord
 from storage import load_records, save_records, DATA_FILE
 from validators import validate_date, validate_temperature, validate_record
-from statistics import summary
+from stats import summary
 from exporters import export_to_csv, import_from_csv
 from themes import get_theme
 from chart import draw_temperature_chart
