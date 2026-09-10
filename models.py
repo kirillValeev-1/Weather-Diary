@@ -36,3 +36,16 @@ class WeatherRecord:
 
     def __str__(self) -> str:
         return f"{self.formatted_date()}: {self.temperature}°C, {self.description}"
+    
+
+    def weather_emoji(self) -> str:
+   
+        if self.precipitation and self.temperature <= 0:
+            return "❄️"
+        if self.precipitation:
+            return "🌧️"
+        if self.temperature >= 25:
+            return "☀️"
+        if self.temperature >= 10:
+            return "🌤️"
+        return "☁️"

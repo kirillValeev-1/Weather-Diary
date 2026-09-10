@@ -59,28 +59,36 @@ def sort_by(column, table_frame) -> None:
 
 def display_records(table_frame: tk.Frame, record_list: list) -> None:
     clear_table(table_frame)
-    headers = [("Дата", "date"), ("Температура", "temperature"),
+    # 5 столбцов: иконка + 4 обычных
+    headers = [("Дата", "date"), ("", None), ("Температура", "temperature"),
                ("Описание", "description"), ("Осадки", "precipitation")]
     for col, (header, key) in enumerate(headers):
         lbl = tk.Label(table_frame, text=header, font=("Arial", 10, "bold"),
                        borderwidth=1, relief="solid", padx=10, pady=5,
-                       bg="lightgray", cursor="hand2")
+                       bg="lightgray",
+                       cursor="hand2" if key else "arrow")
         lbl.grid(row=0, column=col, sticky="nsew")
-        lbl.bind("<Button-1>", lambda e, k=key: sort_by(k, table_frame))
+        if key:
+            lbl.bind("<Button-1>", lambda e, k=key: sort_by(k, table_frame))
+
     for row, rec in enumerate(record_list, start=1):
         tk.Label(table_frame, text=rec.date,
                  borderwidth=1, relief="solid", padx=10, pady=5
                  ).grid(row=row, column=0, sticky="nsew")
+        tk.Label(table_frame, text=rec.weather_emoji(),
+                 borderwidth=1, relief="solid", padx=10, pady=5,
+                 font=("Arial", 12)
+                 ).grid(row=row, column=1, sticky="nsew")
         tk.Label(table_frame, text=str(rec.temperature),
                  borderwidth=1, relief="solid", padx=10, pady=5
-                 ).grid(row=row, column=1, sticky="nsew")
+                 ).grid(row=row, column=2, sticky="nsew")
         tk.Label(table_frame, text=rec.description,
                  borderwidth=1, relief="solid", padx=10, pady=5
-                 ).grid(row=row, column=2, sticky="nsew")
+                 ).grid(row=row, column=3, sticky="nsew")
         tk.Label(table_frame, text=rec.precip_text(),
                  borderwidth=1, relief="solid", padx=10, pady=5
-                 ).grid(row=row, column=3, sticky="nsew")
-    for col in range(4):
+                 ).grid(row=row, column=4, sticky="nsew")
+    for col in range(5):
         table_frame.columnconfigure(col, weight=1)
 
 
@@ -240,7 +248,6 @@ def filter_by_range(from_entry, to_entry, table_frame) -> None:
 
 
 def toggle_precip_filter(var, table_frame) -> None:
-    """Включает/отключает фильтр «только с осадками»."""
     global only_precipitation
     only_precipitation = var.get()
     refresh_table(table_frame)
