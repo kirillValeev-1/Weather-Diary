@@ -2,11 +2,14 @@
 Weather Diary — дневник погоды.
 Главный модуль приложения (GUI на tkinter).
 """
+import os
+import shutil
 import tkinter as tk
+from datetime import datetime
 from tkinter import filedialog, messagebox
 
 from models import WeatherRecord
-from storage import load_records, save_records
+from storage import load_records, save_records, DATA_FILE
 from validators import validate_date, validate_temperature, validate_record
 from statistics import summary
 from exporters import export_to_csv, import_from_csv
@@ -38,13 +41,25 @@ def save_data() -> None:
 
 
 def check_duplicate_date(date: str, ignore_index: int = -1) -> bool:
-    """Проверяет, есть ли уже запись с такой датой (кроме указанной по индексу)."""
     for i, rec in enumerate(records):
         if i == ignore_index:
             continue
         if rec.date == date:
             return True
     return False
+
+
+def create_backup() -> str:
+    """Создаёт резервную копию weather.json с датой в имени. Возвращает путь."""
+    if not os.path.exists(DATA_FILE):
+        return ""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_name = f"weather_backup_{timestamp}.json"
+    try:
+        shutil.copy2(DATA_FILE, backup_name)
+        return backup_name
+    except OSError:
+        return ""
 
 
 def clear_table(table_frame: tk.Frame) -> None:
@@ -146,7 +161,7 @@ def add_record(date_entry, temp_entry, desc_entry, precip_var, table_frame) -> N
         return
     if check_duplicate_date(date):
         status_label.config(
-            text=f"Запись за {date} уже существует. Отредактируйте её или выберите другую дату.",
+            text=f"Запись за {date} уже существует. Отредактируйте её.",
             fg="red")
         return
     records.append(WeatherRecord(date=date, temperature=float(temp),
@@ -336,6 +351,15 @@ def do_import(table_frame) -> None:
         fg="green")
 
 
+def do_backup() -> None:
+    """Создаёт резервную копию файла weather.json."""
+    name = create_backup()
+    if name:
+        status_label.config(text=f"Резервная копия: {name}", fg="green")
+    else:
+        status_label.config(text="Нет данных для резервной копии", fg="red")
+
+
 def apply_theme(root, theme_name, table_frame) -> None:
     global current_theme
     current_theme = theme_name
@@ -369,18 +393,22 @@ def toggle_theme(root, table_frame) -> None:
 def show_about() -> None:
     about = tk.Toplevel()
     about.title("О программе")
-    about.geometry("420x280")
+    about.geometry("440x300")
     about.resizable(False, False)
     info = (
         "Weather Diary — Дневник погоды\n\n"
         "Автор: Валеев Кирилл\n"
-        "Версия: 2.2\n"
+        "Версия: 2.3\n"
         "Дата создания: Апрель 2026\n\n"
-        "Защита от дубликатов, горячие клавиши,\n"
-        "график температур, экспорт/импорт CSV,\n"
-        "светлая и тёмная темы."
+        "Возможности:\n"
+        "• Фильтры, поиск, сортировка\n"
+        "• График температур\n"
+        "• Экспорт/импорт CSV\n"
+        "• Защита от дубликатов\n"
+        "• Резервные копии\n"
+        "• Светлая и тёмная темы"
     )
-    tk.Label(about, text=info, justify="left", padx=20, pady=20,
+    tk.Label(about, text=info, justify="left", padx=20, pady=15,
              font=("Arial", 10)).pack()
     tk.Button(about, text="Закрыть", command=about.destroy).pack(pady=10)
 
@@ -416,12 +444,12 @@ def delete_record(table_frame) -> None:
 def bind_hotkeys(root, table_frame, date_entry, temp_entry, desc_entry,
                  precip_var, filter_date_entry, filter_temp_entry,
                  search_entry, range_from, range_to, precip_filter_var) -> None:
-    """Регистрирует глобальные горячие клавиши приложения."""
     root.bind("<Control-s>",
               lambda e: (save_data(),
                          status_label.config(text="Сохранено (Ctrl+S)", fg="green")))
     root.bind("<Control-e>", lambda e: do_export(table_frame))
     root.bind("<Control-i>", lambda e: do_import(table_frame))
+    root.bind("<Control-b>", lambda e: do_backup())
     root.bind("<Control-t>", lambda e: toggle_theme(root, table_frame))
     root.bind("<Control-r>",
               lambda e: reset_filters(filter_date_entry, filter_temp_entry,
@@ -430,11 +458,92 @@ def bind_hotkeys(root, table_frame, date_entry, temp_entry, desc_entry,
     root.bind("<F1>", lambda e: show_about())
     root.bind("<F5>",
               lambda e: (refresh_table(table_frame),
-                         status_label.config(text="Таблица обновлена (F5)", fg="blue")))
+                         status_label.config(text="Обновлено (F5)", fg="blue")))
     root.bind("<Delete>", lambda e: delete_record(table_frame))
     root.bind("<Return>",
               lambda e: add_record(date_entry, temp_entry, desc_entry,
                                    precip_var, table_frame))
+
+
+def build_menu(root, table_frame, date_entry, temp_entry, desc_entry,
+               precip_var, filter_date_entry, filter_temp_entry,
+               search_entry, range_from, range_to, precip_filter_var) -> None:
+    """Создаёт главное меню приложения."""
+    menubar = tk.Menu(root)
+
+    # ---- Файл ----
+    file_menu = tk.Menu(menubar, tearoff=0)
+    file_menu.add_command(label="Сохранить (Ctrl+S)", command=save_data)
+    file_menu.add_command(label="Резервная копия (Ctrl+B)", command=do_backup)
+    file_menu.add_separator()
+    file_menu.add_command(label="Экспорт в CSV (Ctrl+E)",
+                          command=lambda: do_export(table_frame))
+    file_menu.add_command(label="Импорт из CSV (Ctrl+I)",
+                          command=lambda: do_import(table_frame))
+    file_menu.add_separator()
+    file_menu.add_command(label="Выход", command=root.destroy)
+    menubar.add_cascade(label="Файл", menu=file_menu)
+
+    # ---- Записи ----
+    records_menu = tk.Menu(menubar, tearoff=0)
+    records_menu.add_command(label="Добавить запись (Enter)",
+                             command=lambda: add_record(date_entry, temp_entry,
+                                                        desc_entry, precip_var,
+                                                        table_frame))
+    records_menu.add_command(label="Редактировать запись",
+                             command=lambda: edit_record(table_frame))
+    records_menu.add_command(label="Удалить запись (Delete)",
+                             command=lambda: delete_record(table_frame))
+    records_menu.add_separator()
+    records_menu.add_command(label="Сбросить фильтры (Ctrl+R)",
+                             command=lambda: reset_filters(filter_date_entry,
+                                                           filter_temp_entry,
+                                                           search_entry,
+                                                           range_from, range_to,
+                                                           precip_filter_var,
+                                                           table_frame))
+    menubar.add_cascade(label="Записи", menu=records_menu)
+
+    # ---- Вид ----
+    view_menu = tk.Menu(menubar, tearoff=0)
+    view_menu.add_command(label="Обновить (F5)",
+                          command=lambda: refresh_table(table_frame))
+    view_menu.add_command(label="Переключить тему (Ctrl+T)",
+                          command=lambda: toggle_theme(root, table_frame))
+    menubar.add_cascade(label="Вид", menu=view_menu)
+
+    # ---- Справка ----
+    help_menu = tk.Menu(menubar, tearoff=0)
+    help_menu.add_command(label="О программе (F1)", command=show_about)
+    help_menu.add_command(label="Горячие клавиши",
+                          command=show_hotkeys_help)
+    menubar.add_cascade(label="Справка", menu=help_menu)
+
+    root.config(menu=menubar)
+
+
+def show_hotkeys_help() -> None:
+    """Показывает окно со списком горячих клавиш."""
+    win = tk.Toplevel()
+    win.title("Горячие клавиши")
+    win.geometry("420x320")
+    win.resizable(False, False)
+    text = (
+        "Горячие клавиши Weather Diary:\n\n"
+        "Ctrl+S — сохранить данные\n"
+        "Ctrl+B — создать резервную копию\n"
+        "Ctrl+E — экспорт в CSV\n"
+        "Ctrl+I — импорт из CSV\n"
+        "Ctrl+T — переключить тему\n"
+        "Ctrl+R — сбросить фильтры\n"
+        "Enter — добавить запись (из полей ввода)\n"
+        "Delete — удалить запись\n"
+        "F5 — обновить таблицу\n"
+        "F1 — о программе"
+    )
+    tk.Label(win, text=text, justify="left", padx=20, pady=15,
+             font=("Consolas", 10)).pack()
+    tk.Button(win, text="Закрыть", command=win.destroy).pack(pady=10)
 
 
 def main() -> None:
@@ -442,7 +551,7 @@ def main() -> None:
 
     root = tk.Tk()
     root.title("Weather Diary - Дневник погоды")
-    root.geometry("1000x950")
+    root.geometry("1000x970")
     root.configure(bg="#f0f0f0")
 
     load_data()
@@ -490,6 +599,10 @@ def main() -> None:
     tk.Button(button_frame, text="ИМПОРТ ИЗ CSV", bg="#4a90d9", fg="white",
               font=("Arial", 10, "bold"),
               command=lambda: do_import(table_frame)
+              ).pack(side="left", padx=5)
+    tk.Button(button_frame, text="РЕЗЕРВНАЯ КОПИЯ", bg="#8e44ad", fg="white",
+              font=("Arial", 10, "bold"),
+              command=do_backup
               ).pack(side="left", padx=5)
     tk.Button(button_frame, text="СМЕНИТЬ ТЕМУ", bg="#666", fg="white",
               font=("Arial", 10, "bold"),
@@ -553,7 +666,7 @@ def main() -> None:
                                             precip_filter_var, table_frame)
               ).grid(row=1, column=3, rowspan=5, padx=20)
 
-    status_label = tk.Label(root, text="Готов к работе (F1 — справка)",
+    status_label = tk.Label(root, text="Готов к работе. F1 — горячие клавиши",
                             relief="sunken", anchor="w", bg="#ffffcc")
     status_label.pack(fill="x", side="bottom", padx=10, pady=5)
 
@@ -583,10 +696,13 @@ def main() -> None:
                                                        filter_records(),
                                                        width=e.width))
 
-    # Горячие клавиши
     bind_hotkeys(root, table_frame, date_entry, temp_entry, desc_entry,
                  precip_var, filter_date_entry, filter_temp_entry,
                  search_entry, range_from, range_to, precip_filter_var)
+
+    build_menu(root, table_frame, date_entry, temp_entry, desc_entry,
+               precip_var, filter_date_entry, filter_temp_entry,
+               search_entry, range_from, range_to, precip_filter_var)
 
     root.mainloop()
 
