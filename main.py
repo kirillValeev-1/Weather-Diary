@@ -13,6 +13,7 @@ from statistics import summary
 records = []
 current_filter_date = ""
 current_filter_temp = None
+current_search = ""
 status_label = None
 sort_column = None
 sort_reverse = False
@@ -33,14 +34,12 @@ def clear_table(table_frame: tk.Frame) -> None:
 
 
 def sort_by(column, table_frame) -> None:
-    """Сортирует записи по столбцу и перерисовывает таблицу."""
     global records, sort_column, sort_reverse
     if sort_column == column:
         sort_reverse = not sort_reverse
     else:
         sort_column = column
         sort_reverse = False
-
     key_map = {
         "date": lambda r: r.date,
         "temperature": lambda r: r.temperature,
@@ -57,7 +56,6 @@ def sort_by(column, table_frame) -> None:
 
 def display_records(table_frame: tk.Frame, record_list: list) -> None:
     clear_table(table_frame)
-
     headers = [("Дата", "date"), ("Температура", "temperature"),
                ("Описание", "description"), ("Осадки", "precipitation")]
     for col, (header, key) in enumerate(headers):
@@ -80,7 +78,6 @@ def display_records(table_frame: tk.Frame, record_list: list) -> None:
         tk.Label(table_frame, text=rec.precip_text(),
                  borderwidth=1, relief="solid", padx=10, pady=5
                  ).grid(row=row, column=3, sticky="nsew")
-
     for col in range(4):
         table_frame.columnconfigure(col, weight=1)
 
@@ -92,12 +89,14 @@ def refresh_table(table_frame: tk.Frame) -> None:
 
 
 def filter_records() -> list:
-    global current_filter_date, current_filter_temp
+    global current_filter_date, current_filter_temp, current_search
     filtered = records.copy()
     if current_filter_date:
         filtered = [r for r in filtered if r.date == current_filter_date]
     if current_filter_temp is not None:
         filtered = [r for r in filtered if r.temperature > current_filter_temp]
+    if current_search:
+        filtered = [r for r in filtered if current_search in r.description.lower()]
     return filtered
 
 
@@ -106,12 +105,10 @@ def add_record(date_entry, temp_entry, desc_entry, precip_var, table_frame) -> N
     temp = temp_entry.get().strip()
     desc = desc_entry.get().strip()
     precipitation = precip_var.get()
-
     ok, err = validate_record(date, temp, desc)
     if not ok:
         status_label.config(text=f"Ошибка: {err}", fg="red")
         return
-
     records.append(WeatherRecord(date=date, temperature=float(temp),
                                  description=desc, precipitation=precipitation))
     save_data()
@@ -127,15 +124,12 @@ def edit_record(table_frame) -> None:
     if not records:
         status_label.config(text="Нет записей для редактирования", fg="red")
         return
-
     win = tk.Toplevel()
     win.title("Редактирование записи")
     win.geometry("500x350")
-
     tk.Label(win, text="Выберите запись:").pack(pady=5)
     listbox = tk.Listbox(win, width=70, height=8)
     listbox.pack(fill="both", expand=True, padx=10)
-
     for i, rec in enumerate(records):
         listbox.insert(tk.END,
                        f"{i+1}. {rec.date} | {rec.temperature}°C | {rec.description}")
@@ -148,19 +142,15 @@ def edit_record(table_frame) -> None:
         edit_win = tk.Toplevel(win)
         edit_win.title("Новые данные")
         edit_win.geometry("380x240")
-
         tk.Label(edit_win, text="Дата:").grid(row=0, column=0, padx=5, pady=5)
         e_date = tk.Entry(edit_win); e_date.insert(0, rec.date)
         e_date.grid(row=0, column=1, padx=5, pady=5)
-
         tk.Label(edit_win, text="Температура:").grid(row=1, column=0, padx=5, pady=5)
         e_temp = tk.Entry(edit_win); e_temp.insert(0, str(rec.temperature))
         e_temp.grid(row=1, column=1, padx=5, pady=5)
-
         tk.Label(edit_win, text="Описание:").grid(row=2, column=0, padx=5, pady=5)
         e_desc = tk.Entry(edit_win, width=30); e_desc.insert(0, rec.description)
         e_desc.grid(row=2, column=1, padx=5, pady=5)
-
         p_var = tk.BooleanVar(value=rec.precipitation)
         tk.Checkbutton(edit_win, text="Осадки", variable=p_var
                        ).grid(row=3, column=1, pady=5)
@@ -216,12 +206,26 @@ def filter_by_temp(filter_temp_entry, table_frame) -> None:
         else "Фильтр по температуре сброшен", fg="blue")
 
 
-def reset_filters(filter_date_entry, filter_temp_entry, table_frame) -> None:
-    global current_filter_date, current_filter_temp
+def search_records(query, table_frame) -> None:
+    """Применяет поиск по описанию."""
+    global current_search
+    current_search = query.strip().lower()
+    refresh_table(table_frame)
+    if current_search:
+        status_label.config(text=f"Поиск: '{current_search}'", fg="blue")
+    else:
+        status_label.config(text="Поиск сброшен", fg="blue")
+
+
+def reset_filters(filter_date_entry, filter_temp_entry, search_entry,
+                  table_frame) -> None:
+    global current_filter_date, current_filter_temp, current_search
     current_filter_date = ""
     current_filter_temp = None
+    current_search = ""
     filter_date_entry.delete(0, tk.END)
     filter_temp_entry.delete(0, tk.END)
+    search_entry.delete(0, tk.END)
     refresh_table(table_frame)
     status_label.config(text="Фильтры сброшены", fg="blue")
 
@@ -230,13 +234,10 @@ def delete_record(table_frame) -> None:
     selection_window = tk.Toplevel()
     selection_window.title("Удаление записи о погоде")
     selection_window.geometry("500x350")
-
     tk.Label(selection_window, text="Выберите запись для удаления:",
              font=("Arial", 10, "bold")).pack(pady=10)
-
     listbox = tk.Listbox(selection_window, width=60)
     listbox.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
-
     for i, rec in enumerate(records):
         listbox.insert(tk.END,
                        f"{i+1}. {rec.date} | {rec.temperature}°C | "
@@ -262,40 +263,34 @@ def main() -> None:
 
     root = tk.Tk()
     root.title("Weather Diary - Дневник погоды")
-    root.geometry("950x680")
+    root.geometry("950x720")
     root.configure(bg="#f0f0f0")
 
     load_data()
 
     input_frame = tk.Frame(root, bg="#f0f0f0", bd=2, relief="groove")
     input_frame.pack(fill="x", padx=10, pady=10)
-
     tk.Label(input_frame, text="ДОБАВЛЕНИЕ ЗАПИСИ О ПОГОДЕ",
              font=("Arial", 12, "bold"), bg="#f0f0f0"
              ).grid(row=0, column=0, columnspan=4, pady=5)
-
     tk.Label(input_frame, text="Дата (ГГГГ-ММ-ДД):", bg="#f0f0f0"
              ).grid(row=1, column=0, padx=5, pady=5, sticky="e")
     date_entry = tk.Entry(input_frame, width=15)
     date_entry.grid(row=1, column=1, padx=5, pady=5)
-
     tk.Label(input_frame, text="Температура (°C):", bg="#f0f0f0"
              ).grid(row=1, column=2, padx=5, pady=5, sticky="e")
     temp_entry = tk.Entry(input_frame, width=10)
     temp_entry.grid(row=1, column=3, padx=5, pady=5)
-
     tk.Label(input_frame, text="Описание:", bg="#f0f0f0"
              ).grid(row=2, column=0, padx=5, pady=5, sticky="e")
     desc_entry = tk.Entry(input_frame, width=40)
     desc_entry.grid(row=2, column=1, columnspan=2, padx=5, pady=5, sticky="w")
-
     precip_var = tk.BooleanVar()
     tk.Checkbutton(input_frame, text="Осадки", variable=precip_var, bg="#f0f0f0"
                    ).grid(row=2, column=3, padx=5, pady=5, sticky="w")
 
     button_frame = tk.Frame(root, bg="#f0f0f0")
     button_frame.pack(fill="x", padx=10, pady=5)
-
     tk.Button(button_frame, text="ДОБАВИТЬ", bg="green", fg="white",
               font=("Arial", 10, "bold"),
               command=lambda: add_record(date_entry, temp_entry, desc_entry,
@@ -312,11 +307,9 @@ def main() -> None:
 
     filter_frame = tk.Frame(root, bg="#f0f0f0", bd=2, relief="groove")
     filter_frame.pack(fill="x", padx=10, pady=10)
-
-    tk.Label(filter_frame, text="ФИЛЬТРАЦИЯ (клик по заголовку — сортировка)",
+    tk.Label(filter_frame, text="ФИЛЬТРАЦИЯ И ПОИСК",
              font=("Arial", 10, "bold"), bg="#f0f0f0"
              ).grid(row=0, column=0, columnspan=4, pady=5)
-
     tk.Label(filter_frame, text="По дате:", bg="#f0f0f0"
              ).grid(row=1, column=0, padx=5, pady=5, sticky="e")
     filter_date_entry = tk.Entry(filter_frame, width=15)
@@ -324,7 +317,6 @@ def main() -> None:
     tk.Button(filter_frame, text="Применить",
               command=lambda: filter_by_date(filter_date_entry, table_frame)
               ).grid(row=1, column=2, padx=5)
-
     tk.Label(filter_frame, text="Температура >", bg="#f0f0f0"
              ).grid(row=2, column=0, padx=5, pady=5, sticky="e")
     filter_temp_entry = tk.Entry(filter_frame, width=10)
@@ -333,10 +325,18 @@ def main() -> None:
               command=lambda: filter_by_temp(filter_temp_entry, table_frame)
               ).grid(row=2, column=2, padx=5)
 
-    tk.Button(filter_frame, text="СБРОСИТЬ ФИЛЬТРЫ", bg="orange",
-              command=lambda: reset_filters(filter_date_entry,
-                                            filter_temp_entry, table_frame)
-              ).grid(row=1, column=3, rowspan=2, padx=20)
+    tk.Label(filter_frame, text="Поиск:", bg="#f0f0f0"
+             ).grid(row=3, column=0, padx=5, pady=5, sticky="e")
+    search_entry = tk.Entry(filter_frame, width=20)
+    search_entry.grid(row=3, column=1, padx=5, pady=5)
+    tk.Button(filter_frame, text="Найти",
+              command=lambda: search_records(search_entry.get(), table_frame)
+              ).grid(row=3, column=2, padx=5)
+
+    tk.Button(filter_frame, text="СБРОСИТЬ ВСЁ", bg="orange",
+              command=lambda: reset_filters(filter_date_entry, filter_temp_entry,
+                                            search_entry, table_frame)
+              ).grid(row=1, column=3, rowspan=3, padx=20)
 
     status_label = tk.Label(root, text="Готов к работе", relief="sunken",
                             anchor="w", bg="#ffffcc")
