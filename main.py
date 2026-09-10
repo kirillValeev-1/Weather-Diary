@@ -17,6 +17,7 @@ from themes import get_theme
 from chart import draw_temperature_chart
 
 
+# ---------- Глобальное состояние ----------
 records: list = []
 current_filter_date: str = ""
 current_filter_temp = None
@@ -24,13 +25,17 @@ current_search: str = ""
 date_from: str = ""
 date_to: str = ""
 only_precipitation: bool = False
-status_label = None
 sort_column = None
 sort_reverse: bool = False
 current_theme: str = "light"
+
+# Виджеты, которые создаются в main() и используются в других функциях
+status_label = None
+stats_label = None
 chart_canvas = None
 
 
+# ---------- Работа с данными ----------
 def load_data() -> None:
     global records
     records = load_records()
@@ -41,6 +46,7 @@ def save_data() -> None:
 
 
 def check_duplicate_date(date: str, ignore_index: int = -1) -> bool:
+    """Проверяет, есть ли запись с такой датой (кроме указанной по индексу)."""
     for i, rec in enumerate(records):
         if i == ignore_index:
             continue
@@ -50,7 +56,7 @@ def check_duplicate_date(date: str, ignore_index: int = -1) -> bool:
 
 
 def create_backup() -> str:
-    """Создаёт резервную копию weather.json с датой в имени. Возвращает путь."""
+    """Создаёт резервную копию weather.json с датой в имени."""
     if not os.path.exists(DATA_FILE):
         return ""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -62,6 +68,7 @@ def create_backup() -> str:
         return ""
 
 
+# ---------- Отображение ----------
 def clear_table(table_frame: tk.Frame) -> None:
     for widget in table_frame.winfo_children():
         widget.destroy()
@@ -83,9 +90,10 @@ def sort_by(column, table_frame: tk.Frame) -> None:
     records.sort(key=key_map[column], reverse=sort_reverse)
     save_data()
     refresh_table(table_frame)
-    status_label.config(
-        text=f"Сортировка по '{column}' ({'убыв.' if sort_reverse else 'возр.'})",
-        fg="blue")
+    if status_label is not None:
+        status_label.config(
+            text=f"Сортировка по '{column}' ({'убыв.' if sort_reverse else 'возр.'})",
+            fg="blue")
 
 
 def display_records(table_frame: tk.Frame, record_list: list) -> None:
@@ -123,9 +131,11 @@ def display_records(table_frame: tk.Frame, record_list: list) -> None:
 
 
 def refresh_table(table_frame: tk.Frame) -> None:
+    """Обновляет таблицу, статистику и график."""
     filtered = filter_records()
     display_records(table_frame, filtered)
-    stats_label.config(text=summary(filtered))
+    if stats_label is not None:
+        stats_label.config(text=summary(filtered))
     if chart_canvas is not None:
         draw_temperature_chart(chart_canvas, filtered,
                                width=chart_canvas.winfo_width() or 900)
@@ -150,34 +160,47 @@ def filter_records() -> list:
     return filtered
 
 
+# ---------- Действия ----------
 def add_record(date_entry, temp_entry, desc_entry, precip_var, table_frame) -> None:
+    """Добавляет новую запись о погоде."""
     date = date_entry.get().strip()
     temp = temp_entry.get().strip()
     desc = desc_entry.get().strip()
     precipitation = precip_var.get()
+
     ok, err = validate_record(date, temp, desc)
     if not ok:
-        status_label.config(text=f"Ошибка: {err}", fg="red")
+        if status_label is not None:
+            status_label.config(text=f"Ошибка: {err}", fg="red")
         return
+
     if check_duplicate_date(date):
-        status_label.config(
-            text=f"Запись за {date} уже существует. Отредактируйте её.",
-            fg="red")
+        if status_label is not None:
+            status_label.config(
+                text=f"Запись за {date} уже существует.", fg="red")
         return
-    records.append(WeatherRecord(date=date, temperature=float(temp),
-                                 description=desc, precipitation=precipitation))
+
+    records.append(WeatherRecord(
+        date=date, temperature=float(temp),
+        description=desc, precipitation=precipitation,
+    ))
     save_data()
+
     date_entry.delete(0, tk.END)
     temp_entry.delete(0, tk.END)
     desc_entry.delete(0, tk.END)
     precip_var.set(False)
-    status_label.config(text=f"Запись за {date} добавлена!", fg="green")
+
+    if status_label is not None:
+        status_label.config(text=f"Запись за {date} добавлена!", fg="green")
     refresh_table(table_frame)
 
 
 def edit_record(table_frame) -> None:
+    """Открывает окно редактирования выбранной записи."""
     if not records:
-        status_label.config(text="Нет записей для редактирования", fg="red")
+        if status_label is not None:
+            status_label.config(text="Нет записей для редактирования", fg="red")
         return
     win = tk.Toplevel()
     win.title("Редактирование записи")
@@ -214,12 +237,14 @@ def edit_record(table_frame) -> None:
         def save_changes():
             ok, err = validate_record(e_date.get(), e_temp.get(), e_desc.get())
             if not ok:
-                status_label.config(text=f"Ошибка: {err}", fg="red")
+                if status_label is not None:
+                    status_label.config(text=f"Ошибка: {err}", fg="red")
                 return
             new_date = e_date.get().strip()
             if check_duplicate_date(new_date, ignore_index=idx):
-                status_label.config(
-                    text=f"Запись за {new_date} уже существует", fg="red")
+                if status_label is not None:
+                    status_label.config(
+                        text=f"Запись за {new_date} уже существует", fg="red")
                 return
             rec.date = new_date
             rec.temperature = float(e_temp.get())
@@ -229,7 +254,8 @@ def edit_record(table_frame) -> None:
             refresh_table(table_frame)
             edit_win.destroy()
             win.destroy()
-            status_label.config(text="Запись обновлена", fg="green")
+            if status_label is not None:
+                status_label.config(text="Запись обновлена", fg="green")
 
         tk.Button(edit_win, text="Сохранить", command=save_changes,
                   bg="green", fg="white").grid(row=4, column=0, columnspan=2, pady=10)
@@ -242,13 +268,15 @@ def filter_by_date(filter_date_entry, table_frame) -> None:
     global current_filter_date
     date_str = filter_date_entry.get().strip()
     if date_str and not validate_date(date_str):
-        status_label.config(text="Ошибка: Неверный формат даты для фильтра!", fg="red")
+        if status_label is not None:
+            status_label.config(text="Ошибка: Неверный формат даты!", fg="red")
         return
     current_filter_date = date_str
     refresh_table(table_frame)
-    status_label.config(
-        text=f"Фильтр по дате: {current_filter_date}" if current_filter_date
-        else "Фильтр по дате сброшен", fg="blue")
+    if status_label is not None:
+        status_label.config(
+            text=f"Фильтр по дате: {current_filter_date}" if current_filter_date
+            else "Фильтр по дате сброшен", fg="blue")
 
 
 def filter_by_temp(filter_temp_entry, table_frame) -> None:
@@ -256,24 +284,27 @@ def filter_by_temp(filter_temp_entry, table_frame) -> None:
     temp_str = filter_temp_entry.get().strip()
     if temp_str:
         if not validate_temperature(temp_str):
-            status_label.config(text="Ошибка: Температура фильтра должна быть числом!", fg="red")
+            if status_label is not None:
+                status_label.config(text="Ошибка: Температура должна быть числом!", fg="red")
             return
         current_filter_temp = float(temp_str)
     else:
         current_filter_temp = None
     refresh_table(table_frame)
-    status_label.config(
-        text=f"Фильтр: температура > {current_filter_temp}°C" if current_filter_temp is not None
-        else "Фильтр по температуре сброшен", fg="blue")
+    if status_label is not None:
+        status_label.config(
+            text=f"Фильтр: температура > {current_filter_temp}°C" if current_filter_temp is not None
+            else "Фильтр по температуре сброшен", fg="blue")
 
 
 def search_records(query, table_frame) -> None:
     global current_search
     current_search = query.strip().lower()
     refresh_table(table_frame)
-    status_label.config(
-        text=f"Поиск: '{current_search}'" if current_search else "Поиск сброшен",
-        fg="blue")
+    if status_label is not None:
+        status_label.config(
+            text=f"Поиск: '{current_search}'" if current_search else "Поиск сброшен",
+            fg="blue")
 
 
 def filter_by_range(from_entry, to_entry, table_frame) -> None:
@@ -281,23 +312,27 @@ def filter_by_range(from_entry, to_entry, table_frame) -> None:
     d1 = from_entry.get().strip()
     d2 = to_entry.get().strip()
     if d1 and not validate_date(d1):
-        status_label.config(text="Ошибка: неверная начальная дата", fg="red")
+        if status_label is not None:
+            status_label.config(text="Ошибка: неверная начальная дата", fg="red")
         return
     if d2 and not validate_date(d2):
-        status_label.config(text="Ошибка: неверная конечная дата", fg="red")
+        if status_label is not None:
+            status_label.config(text="Ошибка: неверная конечная дата", fg="red")
         return
     date_from, date_to = d1, d2
     refresh_table(table_frame)
-    status_label.config(text=f"Диапазон: {d1 or '...'} — {d2 or '...'}", fg="blue")
+    if status_label is not None:
+        status_label.config(text=f"Диапазон: {d1 or '...'} — {d2 or '...'}", fg="blue")
 
 
 def toggle_precip_filter(var, table_frame) -> None:
     global only_precipitation
     only_precipitation = var.get()
     refresh_table(table_frame)
-    status_label.config(
-        text=f"Осадки: {'только с осадками' if only_precipitation else 'все'}",
-        fg="blue")
+    if status_label is not None:
+        status_label.config(
+            text=f"Осадки: {'только с осадками' if only_precipitation else 'все'}",
+            fg="blue")
 
 
 def reset_filters(filter_date_entry, filter_temp_entry, search_entry,
@@ -317,18 +352,22 @@ def reset_filters(filter_date_entry, filter_temp_entry, search_entry,
     range_from.delete(0, tk.END)
     range_to.delete(0, tk.END)
     refresh_table(table_frame)
-    status_label.config(text="Фильтры сброшены", fg="blue")
+    if status_label is not None:
+        status_label.config(text="Фильтры сброшены", fg="blue")
 
 
 def do_export(table_frame) -> None:
     rows = filter_records()
     if not rows:
-        status_label.config(text="Нечего экспортировать", fg="red")
+        if status_label is not None:
+            status_label.config(text="Нечего экспортировать", fg="red")
         return
     if export_to_csv(rows):
-        status_label.config(text="Экспорт в weather_export.csv выполнен", fg="green")
+        if status_label is not None:
+            status_label.config(text="Экспорт в weather_export.csv выполнен", fg="green")
     else:
-        status_label.config(text="Ошибка экспорта", fg="red")
+        if status_label is not None:
+            status_label.config(text="Ошибка экспорта", fg="red")
 
 
 def do_import(table_frame) -> None:
@@ -337,7 +376,8 @@ def do_import(table_frame) -> None:
         return
     imported = import_from_csv(path)
     if not imported:
-        status_label.config(text="Не удалось импортировать записи", fg="red")
+        if status_label is not None:
+            status_label.config(text="Не удалось импортировать записи", fg="red")
         return
     added = 0
     for rec in imported:
@@ -346,18 +386,19 @@ def do_import(table_frame) -> None:
             added += 1
     save_data()
     refresh_table(table_frame)
-    status_label.config(
-        text=f"Импортировано: {added} из {len(imported)} (дубликаты пропущены)",
-        fg="green")
+    if status_label is not None:
+        status_label.config(
+            text=f"Импортировано: {added} из {len(imported)} (дубликаты пропущены)",
+            fg="green")
 
 
 def do_backup() -> None:
-    """Создаёт резервную копию файла weather.json."""
     name = create_backup()
-    if name:
-        status_label.config(text=f"Резервная копия: {name}", fg="green")
-    else:
-        status_label.config(text="Нет данных для резервной копии", fg="red")
+    if status_label is not None:
+        if name:
+            status_label.config(text=f"Резервная копия: {name}", fg="green")
+        else:
+            status_label.config(text="Нет данных для резервной копии", fg="red")
 
 
 def apply_theme(root, theme_name, table_frame) -> None:
@@ -387,7 +428,8 @@ def apply_theme(root, theme_name, table_frame) -> None:
 def toggle_theme(root, table_frame) -> None:
     new_theme = "dark" if current_theme == "light" else "light"
     apply_theme(root, new_theme, table_frame)
-    status_label.config(text=f"Тема: {new_theme}", fg="blue")
+    if status_label is not None:
+        status_label.config(text=f"Тема: {new_theme}", fg="blue")
 
 
 def show_about() -> None:
@@ -429,18 +471,21 @@ def delete_record(table_frame) -> None:
     def delete_selected():
         selected = listbox.curselection()
         if not selected:
-            status_label.config(text="Ошибка: Выберите запись для удаления!", fg="red")
+            if status_label is not None:
+                status_label.config(text="Ошибка: Выберите запись для удаления!", fg="red")
             return
         deleted_rec = records.pop(selected[0])
         save_data()
         refresh_table(table_frame)
         selection_window.destroy()
-        status_label.config(text=f"Запись за {deleted_rec.date} удалена!", fg="red")
+        if status_label is not None:
+            status_label.config(text=f"Запись за {deleted_rec.date} удалена!", fg="red")
 
     tk.Button(selection_window, text="Удалить",
               command=delete_selected, bg="red", fg="white").pack(pady=10)
 
 
+# ---------- Горячие клавиши ----------
 def bind_hotkeys(root, table_frame, date_entry, temp_entry, desc_entry,
                  precip_var, filter_date_entry, filter_temp_entry,
                  search_entry, range_from, range_to, precip_filter_var) -> None:
@@ -465,65 +510,8 @@ def bind_hotkeys(root, table_frame, date_entry, temp_entry, desc_entry,
                                    precip_var, table_frame))
 
 
-def build_menu(root, table_frame, date_entry, temp_entry, desc_entry,
-               precip_var, filter_date_entry, filter_temp_entry,
-               search_entry, range_from, range_to, precip_filter_var) -> None:
-    """Создаёт главное меню приложения."""
-    menubar = tk.Menu(root)
-
-    # ---- Файл ----
-    file_menu = tk.Menu(menubar, tearoff=0)
-    file_menu.add_command(label="Сохранить (Ctrl+S)", command=save_data)
-    file_menu.add_command(label="Резервная копия (Ctrl+B)", command=do_backup)
-    file_menu.add_separator()
-    file_menu.add_command(label="Экспорт в CSV (Ctrl+E)",
-                          command=lambda: do_export(table_frame))
-    file_menu.add_command(label="Импорт из CSV (Ctrl+I)",
-                          command=lambda: do_import(table_frame))
-    file_menu.add_separator()
-    file_menu.add_command(label="Выход", command=root.destroy)
-    menubar.add_cascade(label="Файл", menu=file_menu)
-
-    # ---- Записи ----
-    records_menu = tk.Menu(menubar, tearoff=0)
-    records_menu.add_command(label="Добавить запись (Enter)",
-                             command=lambda: add_record(date_entry, temp_entry,
-                                                        desc_entry, precip_var,
-                                                        table_frame))
-    records_menu.add_command(label="Редактировать запись",
-                             command=lambda: edit_record(table_frame))
-    records_menu.add_command(label="Удалить запись (Delete)",
-                             command=lambda: delete_record(table_frame))
-    records_menu.add_separator()
-    records_menu.add_command(label="Сбросить фильтры (Ctrl+R)",
-                             command=lambda: reset_filters(filter_date_entry,
-                                                           filter_temp_entry,
-                                                           search_entry,
-                                                           range_from, range_to,
-                                                           precip_filter_var,
-                                                           table_frame))
-    menubar.add_cascade(label="Записи", menu=records_menu)
-
-    # ---- Вид ----
-    view_menu = tk.Menu(menubar, tearoff=0)
-    view_menu.add_command(label="Обновить (F5)",
-                          command=lambda: refresh_table(table_frame))
-    view_menu.add_command(label="Переключить тему (Ctrl+T)",
-                          command=lambda: toggle_theme(root, table_frame))
-    menubar.add_cascade(label="Вид", menu=view_menu)
-
-    # ---- Справка ----
-    help_menu = tk.Menu(menubar, tearoff=0)
-    help_menu.add_command(label="О программе (F1)", command=show_about)
-    help_menu.add_command(label="Горячие клавиши",
-                          command=show_hotkeys_help)
-    menubar.add_cascade(label="Справка", menu=help_menu)
-
-    root.config(menu=menubar)
-
-
+# ---------- Меню ----------
 def show_hotkeys_help() -> None:
-    """Показывает окно со списком горячих клавиш."""
     win = tk.Toplevel()
     win.title("Горячие клавиши")
     win.geometry("420x320")
@@ -546,8 +534,61 @@ def show_hotkeys_help() -> None:
     tk.Button(win, text="Закрыть", command=win.destroy).pack(pady=10)
 
 
+def build_menu(root, table_frame, date_entry, temp_entry, desc_entry,
+               precip_var, filter_date_entry, filter_temp_entry,
+               search_entry, range_from, range_to, precip_filter_var) -> None:
+    menubar = tk.Menu(root)
+
+    file_menu = tk.Menu(menubar, tearoff=0)
+    file_menu.add_command(label="Сохранить (Ctrl+S)", command=save_data)
+    file_menu.add_command(label="Резервная копия (Ctrl+B)", command=do_backup)
+    file_menu.add_separator()
+    file_menu.add_command(label="Экспорт в CSV (Ctrl+E)",
+                          command=lambda: do_export(table_frame))
+    file_menu.add_command(label="Импорт из CSV (Ctrl+I)",
+                          command=lambda: do_import(table_frame))
+    file_menu.add_separator()
+    file_menu.add_command(label="Выход", command=root.destroy)
+    menubar.add_cascade(label="Файл", menu=file_menu)
+
+    records_menu = tk.Menu(menubar, tearoff=0)
+    records_menu.add_command(label="Добавить запись (Enter)",
+                             command=lambda: add_record(date_entry, temp_entry,
+                                                        desc_entry, precip_var,
+                                                        table_frame))
+    records_menu.add_command(label="Редактировать запись",
+                             command=lambda: edit_record(table_frame))
+    records_menu.add_command(label="Удалить запись (Delete)",
+                             command=lambda: delete_record(table_frame))
+    records_menu.add_separator()
+    records_menu.add_command(label="Сбросить фильтры (Ctrl+R)",
+                             command=lambda: reset_filters(filter_date_entry,
+                                                           filter_temp_entry,
+                                                           search_entry,
+                                                           range_from, range_to,
+                                                           precip_filter_var,
+                                                           table_frame))
+    menubar.add_cascade(label="Записи", menu=records_menu)
+
+    view_menu = tk.Menu(menubar, tearoff=0)
+    view_menu.add_command(label="Обновить (F5)",
+                          command=lambda: refresh_table(table_frame))
+    view_menu.add_command(label="Переключить тему (Ctrl+T)",
+                          command=lambda: toggle_theme(root, table_frame))
+    menubar.add_cascade(label="Вид", menu=view_menu)
+
+    help_menu = tk.Menu(menubar, tearoff=0)
+    help_menu.add_command(label="О программе (F1)", command=show_about)
+    help_menu.add_command(label="Горячие клавиши", command=show_hotkeys_help)
+    menubar.add_cascade(label="Справка", menu=help_menu)
+
+    root.config(menu=menubar)
+
+
+# ---------- Точка входа ----------
 def main() -> None:
-    global status_label, chart_canvas
+    # ВАЖНО: stats_label тоже должен быть глобальным!
+    global status_label, stats_label, chart_canvas
 
     root = tk.Tk()
     root.title("Weather Diary - Дневник погоды")
@@ -556,6 +597,7 @@ def main() -> None:
 
     load_data()
 
+    # --- Форма добавления ---
     input_frame = tk.Frame(root, bg="#f0f0f0", bd=2, relief="groove")
     input_frame.pack(fill="x", padx=10, pady=10)
     tk.Label(input_frame, text="ДОБАВЛЕНИЕ ЗАПИСИ О ПОГОДЕ",
@@ -577,6 +619,7 @@ def main() -> None:
     tk.Checkbutton(input_frame, text="Осадки", variable=precip_var, bg="#f0f0f0"
                    ).grid(row=2, column=3, padx=5, pady=5, sticky="w")
 
+    # --- Кнопки действий ---
     button_frame = tk.Frame(root, bg="#f0f0f0")
     button_frame.pack(fill="x", padx=10, pady=5)
     tk.Button(button_frame, text="ДОБАВИТЬ", bg="green", fg="white",
@@ -613,6 +656,7 @@ def main() -> None:
               command=show_about
               ).pack(side="left", padx=5)
 
+    # --- Фильтры и поиск ---
     filter_frame = tk.Frame(root, bg="#f0f0f0", bd=2, relief="groove")
     filter_frame.pack(fill="x", padx=10, pady=10)
     tk.Label(filter_frame, text="ФИЛЬТРАЦИЯ И ПОИСК",
@@ -666,19 +710,23 @@ def main() -> None:
                                             precip_filter_var, table_frame)
               ).grid(row=1, column=3, rowspan=5, padx=20)
 
+    # --- Статус-бар ---
     status_label = tk.Label(root, text="Готов к работе. F1 — горячие клавиши",
                             relief="sunken", anchor="w", bg="#ffffcc")
     status_label.pack(fill="x", side="bottom", padx=10, pady=5)
 
+    # --- Таблица ---
     table_frame = tk.Frame(root, bg="white")
     table_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
+    # --- Статистика ---
     stats_frame = tk.Frame(root, bg="#e0e8f0", bd=2, relief="groove")
     stats_frame.pack(fill="x", padx=10, pady=5)
     stats_label = tk.Label(stats_frame, text=summary(records),
                            font=("Arial", 10), bg="#e0e8f0")
     stats_label.pack(pady=5)
 
+    # --- График ---
     chart_frame = tk.Frame(root, bg="#fafafa", bd=2, relief="groove")
     chart_frame.pack(fill="x", padx=10, pady=5)
     tk.Label(chart_frame, text="ГРАФИК ТЕМПЕРАТУР",
@@ -687,6 +735,7 @@ def main() -> None:
                              bg="white", highlightthickness=0)
     chart_canvas.pack(padx=10, pady=5, fill="x")
 
+    # --- Первичная отрисовка ---
     display_records(table_frame, records)
     stats_label.config(text=summary(records))
     draw_temperature_chart(chart_canvas, records)
@@ -696,6 +745,7 @@ def main() -> None:
                                                        filter_records(),
                                                        width=e.width))
 
+    # --- Хоткеи и меню ---
     bind_hotkeys(root, table_frame, date_entry, temp_entry, desc_entry,
                  precip_var, filter_date_entry, filter_temp_entry,
                  search_entry, range_from, range_to, precip_filter_var)
