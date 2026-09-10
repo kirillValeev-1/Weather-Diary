@@ -14,6 +14,8 @@ records = []
 current_filter_date = ""
 current_filter_temp = None
 current_search = ""
+date_from = ""
+date_to = ""
 status_label = None
 sort_column = None
 sort_reverse = False
@@ -64,7 +66,6 @@ def display_records(table_frame: tk.Frame, record_list: list) -> None:
                        bg="lightgray", cursor="hand2")
         lbl.grid(row=0, column=col, sticky="nsew")
         lbl.bind("<Button-1>", lambda e, k=key: sort_by(k, table_frame))
-
     for row, rec in enumerate(record_list, start=1):
         tk.Label(table_frame, text=rec.date,
                  borderwidth=1, relief="solid", padx=10, pady=5
@@ -90,6 +91,7 @@ def refresh_table(table_frame: tk.Frame) -> None:
 
 def filter_records() -> list:
     global current_filter_date, current_filter_temp, current_search
+    global date_from, date_to
     filtered = records.copy()
     if current_filter_date:
         filtered = [r for r in filtered if r.date == current_filter_date]
@@ -97,6 +99,10 @@ def filter_records() -> list:
         filtered = [r for r in filtered if r.temperature > current_filter_temp]
     if current_search:
         filtered = [r for r in filtered if current_search in r.description.lower()]
+    if date_from:
+        filtered = [r for r in filtered if r.date >= date_from]
+    if date_to:
+        filtered = [r for r in filtered if r.date <= date_to]
     return filtered
 
 
@@ -207,25 +213,44 @@ def filter_by_temp(filter_temp_entry, table_frame) -> None:
 
 
 def search_records(query, table_frame) -> None:
-    """Применяет поиск по описанию."""
     global current_search
     current_search = query.strip().lower()
     refresh_table(table_frame)
-    if current_search:
-        status_label.config(text=f"Поиск: '{current_search}'", fg="blue")
-    else:
-        status_label.config(text="Поиск сброшен", fg="blue")
+    status_label.config(
+        text=f"Поиск: '{current_search}'" if current_search else "Поиск сброшен",
+        fg="blue")
+
+
+def filter_by_range(from_entry, to_entry, table_frame) -> None:
+    """Применяет фильтр по диапазону дат."""
+    global date_from, date_to
+    d1 = from_entry.get().strip()
+    d2 = to_entry.get().strip()
+    if d1 and not validate_date(d1):
+        status_label.config(text="Ошибка: неверная начальная дата", fg="red")
+        return
+    if d2 and not validate_date(d2):
+        status_label.config(text="Ошибка: неверная конечная дата", fg="red")
+        return
+    date_from, date_to = d1, d2
+    refresh_table(table_frame)
+    status_label.config(text=f"Диапазон: {d1 or '...'} — {d2 or '...'}", fg="blue")
 
 
 def reset_filters(filter_date_entry, filter_temp_entry, search_entry,
-                  table_frame) -> None:
+                  range_from, range_to, table_frame) -> None:
     global current_filter_date, current_filter_temp, current_search
+    global date_from, date_to
     current_filter_date = ""
     current_filter_temp = None
     current_search = ""
+    date_from = ""
+    date_to = ""
     filter_date_entry.delete(0, tk.END)
     filter_temp_entry.delete(0, tk.END)
     search_entry.delete(0, tk.END)
+    range_from.delete(0, tk.END)
+    range_to.delete(0, tk.END)
     refresh_table(table_frame)
     status_label.config(text="Фильтры сброшены", fg="blue")
 
@@ -263,7 +288,7 @@ def main() -> None:
 
     root = tk.Tk()
     root.title("Weather Diary - Дневник погоды")
-    root.geometry("950x720")
+    root.geometry("950x780")
     root.configure(bg="#f0f0f0")
 
     load_data()
@@ -310,6 +335,7 @@ def main() -> None:
     tk.Label(filter_frame, text="ФИЛЬТРАЦИЯ И ПОИСК",
              font=("Arial", 10, "bold"), bg="#f0f0f0"
              ).grid(row=0, column=0, columnspan=4, pady=5)
+
     tk.Label(filter_frame, text="По дате:", bg="#f0f0f0"
              ).grid(row=1, column=0, padx=5, pady=5, sticky="e")
     filter_date_entry = tk.Entry(filter_frame, width=15)
@@ -317,6 +343,7 @@ def main() -> None:
     tk.Button(filter_frame, text="Применить",
               command=lambda: filter_by_date(filter_date_entry, table_frame)
               ).grid(row=1, column=2, padx=5)
+
     tk.Label(filter_frame, text="Температура >", bg="#f0f0f0"
              ).grid(row=2, column=0, padx=5, pady=5, sticky="e")
     filter_temp_entry = tk.Entry(filter_frame, width=10)
@@ -333,10 +360,23 @@ def main() -> None:
               command=lambda: search_records(search_entry.get(), table_frame)
               ).grid(row=3, column=2, padx=5)
 
+    tk.Label(filter_frame, text="С даты:", bg="#f0f0f0"
+             ).grid(row=4, column=0, padx=5, pady=5, sticky="e")
+    range_from = tk.Entry(filter_frame, width=12)
+    range_from.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+    tk.Label(filter_frame, text="По:", bg="#f0f0f0"
+             ).grid(row=4, column=1, padx=5, pady=5, sticky="e")
+    range_to = tk.Entry(filter_frame, width=12)
+    range_to.grid(row=4, column=2, padx=5, pady=5, sticky="w")
+    tk.Button(filter_frame, text="Применить диапазон",
+              command=lambda: filter_by_range(range_from, range_to, table_frame)
+              ).grid(row=4, column=3, padx=5)
+
     tk.Button(filter_frame, text="СБРОСИТЬ ВСЁ", bg="orange",
               command=lambda: reset_filters(filter_date_entry, filter_temp_entry,
-                                            search_entry, table_frame)
-              ).grid(row=1, column=3, rowspan=3, padx=20)
+                                            search_entry, range_from, range_to,
+                                            table_frame)
+              ).grid(row=1, column=3, rowspan=4, padx=20)
 
     status_label = tk.Label(root, text="Готов к работе", relief="sunken",
                             anchor="w", bg="#ffffcc")
